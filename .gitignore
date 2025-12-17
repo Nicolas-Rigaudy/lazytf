@@ -22,10 +22,6 @@ build/
 .vscode/
 *.code-workspace
 
-# Claude Code / AI Assistant files
-.claude/
-claude.md
-
 # Temporary files
 *.tmp
 *.temp

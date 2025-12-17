@@ -4,7 +4,7 @@
 // This file contains backend var file discovery and matching logic:
 // - DiscoverBackendVarFiles: Find backend .tfvars files
 // - extractEnvFromBackendFile: Extract environment name from filename
-// - MatchBackendToVarFile: Match backend configs to var files
+// - MatchBackendsForEnv: Match backend configs to environment names
 // - FormatBackendInfo: Format backend info for UI display
 package terraform
 
@@ -96,12 +96,11 @@ func extractEnvFromBackendFile(filename string) string {
 	return name
 }
 
-// MatchBackendToVarFile finds backend config files that match the given var file.
+// MatchBackendsForEnv finds backend config files that match the given environment name.
 // Matching logic:
-//   - Use var file's EnvName field
 //   - Find backend files with matching EnvName
 //   - If no match found, return generic backend.tfvars if it exists
-func MatchBackendToVarFile(varFile VarFile, backends []BackendVarFile) []BackendVarFile {
+func MatchBackendsForEnv(envName string, backends []BackendVarFile) []BackendVarFile {
 	var matches []BackendVarFile
 	var genericBackend *BackendVarFile
 
@@ -115,7 +114,7 @@ func MatchBackendToVarFile(varFile VarFile, backends []BackendVarFile) []Backend
 		}
 
 		// Check if env name matches
-		if backend.EnvName == varFile.EnvName {
+		if backend.EnvName == envName {
 			matches = append(matches, *backend)
 		}
 	}
