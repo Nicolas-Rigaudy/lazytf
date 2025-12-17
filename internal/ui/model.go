@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
@@ -33,6 +34,7 @@ type Model struct {
 	backendVarFiles     []terraform.BackendVarFile
 	selectedBackendFile *terraform.BackendVarFile
 	backendState        terraform.BackendState
+	modal               Modal // Modal component
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
@@ -79,6 +81,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
 	mainPanel := NewMainPanel()
 	titleBar := NewTitleBar()
 	statusBar := NewStatusBar()
+	modal := NewModal()
 
 	m := Model{
 		sidebar:             sidebar,
@@ -98,6 +101,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
 		backendVarFiles:     backendVarFiles,
 		selectedBackendFile: nil,
 		backendState:        backendState,
+		modal:               modal,
 	}
 
 	// Set initial status bar text
@@ -142,13 +146,18 @@ func (m Model) buildStatusText() string {
 }
 
 func (m Model) View() string {
+	// Build base UI
 	title := m.titleBar.View()
-
 	content := lipgloss.JoinHorizontal(lipgloss.Top, m.sidebar.View(), m.mainPanel.View())
-
 	status := m.statusBar.View()
+	baseUI := lipgloss.JoinVertical(lipgloss.Left, title, content, status)
 
-	return lipgloss.JoinVertical(lipgloss.Left, title, content, status)
+	// If modal is active, render it (modal handles its own rendering)
+	if m.modal.IsActive() {
+		return m.modal.View(m.width, m.height)
+	}
+
+	return baseUI
 }
 
 func (m Model) Init() tea.Cmd {
@@ -156,11 +165,68 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// If modal is active, it gets priority for input handling
+	if m.modal.IsActive() {
+		var cmd tea.Cmd
+		m.modal, cmd = m.modal.Update(msg)
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "ctrl+c": // ctrl+c always quits (emergency exit)
 			return m, tea.Quit
+		case "q": // 'q' only quits when modal is NOT active
+			if !m.modal.IsActive() {
+				return m, tea.Quit
+			}
+		case "t": // TEST: Show test confirm modal (remove later)
+			m.modal.Show(ModalState{
+				Type:    ModalConfirm,
+				Title:   "Test Confirmation Modal",
+				Message: "This is a test modal!\n\nBackend: variables/backend/local/backend_dev2.tfvars\nVar-file: variables/dev2.tfvars\n\nDoes it look good?",
+				OnConfirm: func() tea.Msg {
+					m.statusBar.SetText("✅ Modal confirmed!")
+					return nil
+				},
+			})
+			return m, nil
+		case "s": // TEST: Show test select modal (remove later)
+			items := []string{"dev1", "dev2", "int", "prod"}
+			m.modal.Show(ModalState{
+				Type:     ModalSelect,
+				Title:    "Select Environment",
+				Items:    items,
+				Selected: 0,
+				OnSelect: func(selectedIndex int) tea.Msg {
+					m.statusBar.SetText("✅ Selected: " + items[selectedIndex])
+					return nil
+				},
+			})
+			return m, nil
+
+		case "i":
+			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil {
+				envNames := terraform.GetVarFileDisplayNames(m.varFiles)
+
+				m.modal.Show(ModalState{
+					Type:    ModalSelect,
+					Title:   "Terraform Init",
+					Message: "Choose an environment to init for " + m.selectedProject.Name,
+					Items:   envNames,
+					OnSelect: func(index int) tea.Msg {
+						selectedEnv := envNames[index]
+
+						backends := terraform.MatchBackendsForEnv(selectedEnv, m.backendVarFiles)
+
+						return InitEnvironmentSelectedMsg{
+							EnvName:  selectedEnv,
+							Backends: backends,
+						}
+					},
+				})
+				return m, nil
+			}
 		case "tab":
 			m.focusIndex = (m.focusIndex + 1) % m.focusableCount
 			m.updateFocusStates()
@@ -259,7 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedVarFile = selectedVarFile
 
 		// Find matching backend configs (returns a slice, may be 0, 1, or multiple)
-		matchedBackends := terraform.MatchBackendToVarFile(*selectedVarFile, m.backendVarFiles)
+		matchedBackends := terraform.MatchBackendsForEnv(selectedVarFile.EnvName, m.backendVarFiles)
 		backendInfo := terraform.FormatBackendInfo(matchedBackends)
 
 		// Check if this environment is currently initialized
@@ -284,6 +350,83 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.SetText(m.buildStatusText())
 
 		return m, nil
+
+	case InitEnvironmentSelectedMsg:
+		switch len(msg.Backends) {
+		case 0:
+			m.modal.Show(ModalState{
+				Type:    ModalError,
+				Title:   "❌ No Backend Config Found",
+				Message: "No backend configuration found for environment: " + msg.EnvName,
+				ErrorText: "Please create a backend configuration file (e.g., backend_" + msg.EnvName + ".tfvars) " +
+					"to initialize this environment.",
+			})
+			return m, nil
+		case 1:
+			m.modal.Show(ModalState{
+				Type:    ModalConfirm,
+				Title:   "Confirm Terraform Init",
+				Message: "Initialize project " + m.selectedProject.Name + " with environment " + msg.EnvName + "?\n\nUsing backend: " + msg.Backends[0].Name,
+				OnConfirm: func() tea.Msg {
+					return RunInitMsg{
+						ProjectPath: m.selectedProject.Path,
+						Options: terraform.InitOptions{
+							BackendConfigFile: msg.Backends[0],
+							Reconfigure:       true,
+							Upgrade:           true,
+							Input:             false,
+						},
+					}
+				},
+			})
+			return m, nil
+		default:
+			var backendNames []string
+			for _, b := range msg.Backends {
+				backendNames = append(backendNames, b.Name+" ("+filepath.Base(b.Path)+")")
+
+			}
+			m.modal.Show(ModalState{
+				Type:    ModalSelect,
+				Title:   "Select Backend Config",
+				Message: "Multiple backend configurations found for environment " + msg.EnvName + ". Please select one:",
+				Items:   backendNames,
+				OnSelect: func(backendIndex int) tea.Msg {
+					return InitBackendSelectedMsg{
+						EnvName: msg.EnvName,
+						Backend: msg.Backends[backendIndex],
+					}
+				},
+			})
+			return m, nil
+		}
+
+	case InitBackendSelectedMsg:
+		m.modal.Show(ModalState{
+			Type:    ModalConfirm,
+			Title:   "Confirm Terraform Init",
+			Message: "Initialize project " + m.selectedProject.Name + " with environment " + msg.EnvName + "?\n\nUsing backend: " + msg.Backend.Name,
+			OnConfirm: func() tea.Msg {
+				return RunInitMsg{
+					ProjectPath: m.selectedProject.Path,
+					Options: terraform.InitOptions{
+						BackendConfigFile: msg.Backend,
+						Reconfigure:       true,
+						Upgrade:           true,
+						Input:             false,
+					},
+				}
+			},
+		})
+		return m, nil
+
+	case RunInitMsg:
+		cmd := terraform.RunInit(msg.ProjectPath, msg.Options)
+		return m, cmd
+
+	case terraform.CommandCompletedMsg:
+		// Update content with command output
+		m.mainPanel.Content = m.mainPanel.Content + "\n\n" + string(msg.Output)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

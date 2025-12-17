@@ -71,12 +71,7 @@ func DetectCurrentBackend(projectPath string, backendVarFiles []BackendVarFile) 
 
 	// Try to match with available backend var files
 	if state.DetectedEnv != "" {
-		for i := range backendVarFiles {
-			if backendVarFiles[i].EnvName == state.DetectedEnv {
-				state.MatchedBackend = &backendVarFiles[i]
-				break
-			}
-		}
+		state.MatchedBackends = MatchBackendsForEnv(state.DetectedEnv, backendVarFiles)
 	}
 
 	return state
@@ -149,9 +144,8 @@ func FormatBackendState(state BackendState) string {
 		result += "Current Environment: " + state.DetectedEnv + "\n"
 	}
 
-	if state.MatchedBackend != nil {
-		result += "Backend Config: " + state.MatchedBackend.Name + "\n"
-		result += "Config Path: " + state.MatchedBackend.Path + "\n"
+	if len(state.MatchedBackends) > 0 {
+		result += "\n" + FormatBackendInfo(state.MatchedBackends)
 	}
 
 	return result

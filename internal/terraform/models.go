@@ -29,11 +29,11 @@ type BackendVarFile struct {
 
 // BackendState represents the current Terraform backend initialization state.
 type BackendState struct {
-	IsInitialized  bool              // true if .terraform/ directory exists
-	BackendType    string            // e.g., "s3", "local", "azurerm"
-	BackendConfig  map[string]string // key-value pairs from backend config
-	DetectedEnv    string            // environment name inferred from backend config (e.g., "dev2")
-	MatchedBackend *BackendVarFile   // the backend var file that matches current state
+	IsInitialized   bool              // true if .terraform/ directory exists
+	BackendType     string            // e.g., "s3", "local", "azurerm"
+	BackendConfig   map[string]string // key-value pairs from backend config
+	DetectedEnv     string            // environment name inferred from backend config (e.g., "dev2")
+	MatchedBackends []BackendVarFile  // the backend var files that matches current state
 }
 
 // Mode represents how LazyTF is operating.
