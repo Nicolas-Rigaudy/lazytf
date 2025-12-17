@@ -3,6 +3,7 @@ package ui
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,6 +22,7 @@ type Model struct {
 	mainPanel           MainPanelModel
 	titleBar            TitleBarModel
 	statusBar           StatusBarModel
+	header              HeaderModel
 	focusIndex          int
 	focusableCount      int
 	width               int
@@ -61,6 +63,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
 
 		sidebar = NewSidebar(sidebarItems...)
 		sidebar.Title = selectedProject.Name
+		sidebar.InitializedEnv = backendState.DetectedEnv
 
 	} else {
 		// Multi-project mode setup
@@ -81,6 +84,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
 	mainPanel := NewMainPanel()
 	titleBar := NewTitleBar()
 	statusBar := NewStatusBar()
+	header := NewHeader()
 	modal := NewModal()
 
 	m := Model{
@@ -88,6 +92,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
 		mainPanel:           mainPanel,
 		titleBar:            titleBar,
 		statusBar:           statusBar,
+		header:              header,
 		focusIndex:          0,
 		focusableCount:      2,
 		width:               0,
@@ -119,25 +124,12 @@ func (m *Model) updateFocusStates() {
 func (m Model) buildStatusText() string {
 	var parts []string
 
-	// Add project info if selected
-	if m.selectedProject != nil {
-		parts = append(parts, "Project: "+m.selectedProject.Name)
-	}
-
-	// Add environment info if var file selected
-	if m.selectedVarFile != nil {
-		parts = append(parts, "Env: "+m.selectedVarFile.EnvName)
-	}
-
-	// Add separator if we have context
-	if len(parts) > 0 {
-		parts = append(parts, "│")
-	}
-
 	// Add help keys based on view mode
-	if m.viewMode == ViewModeProjectDetail && m.mode == terraform.ModeMultiProject {
-		parts = append(parts, "Backspace: back")
-		parts = append(parts, "│")
+	if m.viewMode == ViewModeProjectDetail {
+		if m.mode == terraform.ModeMultiProject {
+			parts = append(parts, "Backspace: back", "│")
+		}
+		parts = append(parts, "i: init", "│")
 	}
 
 	parts = append(parts, "Tab: switch", "↑↓/jk: navigate", "Enter: select", "q: quit")
@@ -148,9 +140,28 @@ func (m Model) buildStatusText() string {
 func (m Model) View() string {
 	// Build base UI
 	title := m.titleBar.View()
+	header := m.header.View(InfoHeaderData{
+		ProjectName: func() string {
+			if m.selectedProject != nil {
+				return m.selectedProject.Name
+			} else {
+				return "No Project"
+			}
+		}(),
+		EnvName: func() string {
+			if m.selectedVarFile != nil {
+				return m.selectedVarFile.EnvName
+			} else {
+				return "No Env"
+			}
+		}(),
+		IsInitialized:   m.backendState.IsInitialized && m.selectedVarFile != nil && m.backendState.DetectedEnv == m.selectedVarFile.EnvName,
+		LastCommand:     "",
+		LastCommandTime: time.Time{},
+	})
 	content := lipgloss.JoinHorizontal(lipgloss.Top, m.sidebar.View(), m.mainPanel.View())
 	status := m.statusBar.View()
-	baseUI := lipgloss.JoinVertical(lipgloss.Left, title, content, status)
+	baseUI := lipgloss.JoinVertical(lipgloss.Left, title, header, content, status)
 
 	// If modal is active, render it (modal handles its own rendering)
 	if m.modal.IsActive() {
@@ -299,6 +310,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sidebar.Items = sidebarItems
 		m.sidebar.Title = selectedProject.Name
 		m.sidebar.SelectedIndex = 0 // Reset to first item
+		m.sidebar.InitializedEnv = m.backendState.DetectedEnv
 
 		// Switch to detail view
 		m.viewMode = ViewModeProjectDetail
@@ -324,13 +336,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		selectedVarFile := &m.varFiles[msg.Index]
 		m.selectedVarFile = selectedVarFile
 
-		// Find matching backend configs (returns a slice, may be 0, 1, or multiple)
+		// Find matching backend configs
 		matchedBackends := terraform.MatchBackendsForEnv(selectedVarFile.EnvName, m.backendVarFiles)
 		backendInfo := terraform.FormatBackendInfo(matchedBackends)
 
-		// Check if this environment is currently initialized
+		// Determine initialization status for this environment
+		isThisEnvInitialized := m.backendState.IsInitialized && m.backendState.DetectedEnv == selectedVarFile.EnvName
+
+		// Build status string
 		var currentStatus string
-		if m.backendState.IsInitialized && m.backendState.DetectedEnv == selectedVarFile.EnvName {
+		if isThisEnvInitialized {
 			currentStatus = "✅ This environment is currently initialized"
 		} else if m.backendState.IsInitialized {
 			currentStatus = "⚠️  Different environment is initialized (" + m.backendState.DetectedEnv + ")"
@@ -338,7 +353,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			currentStatus = "❌ Not initialized"
 		}
 
-		// Update main panel with title and content
+		// If not initialized, show modal asking if they want to init
+		if !isThisEnvInitialized {
+			m.modal.Show(ModalState{
+				Type:  ModalConfirm,
+				Title: "⚠️  Environment Not Initialized",
+				Message: "Environment \"" + selectedVarFile.EnvName + "\" is not initialized.\n\n" +
+					"Terraform commands won't work until you initialize it.\n\n" +
+					"[Enter] Initialize now    [Esc] View details anyway",
+				OnConfirm: func() tea.Msg {
+					// Start init workflow
+					backends := terraform.MatchBackendsForEnv(selectedVarFile.EnvName, m.backendVarFiles)
+					return InitEnvironmentSelectedMsg{
+						EnvName:  selectedVarFile.EnvName,
+						Backends: backends,
+					}
+				},
+				OnCancel: func() tea.Msg {
+					// Show details anyway - trigger display update
+					return nil
+				},
+			})
+		}
+
 		m.mainPanel.Title = "🌍 Environment Details"
 		m.mainPanel.Content = "Environment: " + selectedVarFile.EnvName + "\n" +
 			"Status: " + currentStatus + "\n\n" +
@@ -352,6 +389,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case InitEnvironmentSelectedMsg:
+		m.selectedVarFile, m.sidebar.SelectedIndex = terraform.FindVarFileByEnvName(msg.EnvName, m.varFiles)
 		switch len(msg.Backends) {
 		case 0:
 			m.modal.Show(ModalState{
@@ -427,6 +465,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case terraform.CommandCompletedMsg:
 		// Update content with command output
 		m.mainPanel.Content = m.mainPanel.Content + "\n\n" + string(msg.Output)
+		m.backendState = terraform.DetectCurrentBackend(m.selectedProject.Path, m.backendVarFiles)
+		m.sidebar.InitializedEnv = m.backendState.DetectedEnv
+
+		return m, func() tea.Msg {
+			return VarFileSelectedMsg{
+				VarFileName: m.selectedVarFile.Name,
+				Index:       m.sidebar.SelectedIndex,
+			}
+		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -434,7 +481,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		titleBarHeight := 1
 		statusBarHeight := 1
-		contentHeight := m.height - titleBarHeight - statusBarHeight - 2
+		contentHeight := m.height - titleBarHeight - m.header.Height - statusBarHeight - 2
 
 		sidebarWidth := m.width / 4
 		mainPanelWidth := m.width - sidebarWidth - 4
@@ -445,6 +492,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sidebar.Height = contentHeight
 		m.mainPanel.Width = mainPanelWidth
 		m.mainPanel.Height = contentHeight
+		m.header.Width = m.width
 	}
 	return m, nil
 }

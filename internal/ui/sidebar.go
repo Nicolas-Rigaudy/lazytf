@@ -35,12 +35,13 @@ var (
 )
 
 type SidebarModel struct {
-	Title         string
-	Items         []string
-	SelectedIndex int
-	Width         int
-	Height        int
-	IsFocused     bool
+	Title          string
+	Items          []string
+	SelectedIndex  int
+	Width          int
+	Height         int
+	IsFocused      bool
+	InitializedEnv string
 }
 
 func NewSidebar(items ...string) SidebarModel {
@@ -79,10 +80,16 @@ func (m SidebarModel) View() string {
 
 	items := []string{}
 	for i, item := range m.Items {
+		// Add ✅ indicator if this env is initialized
+		displayItem := item
+		if m.InitializedEnv != "" && item == m.InitializedEnv {
+			displayItem = item + " ✅ Initialized"
+		}
+
 		if i == m.SelectedIndex {
-			items = append(items, highlightedItemStyle.Render(item))
+			items = append(items, highlightedItemStyle.Render(displayItem))
 		} else {
-			items = append(items, normalItemStyle.Render(item))
+			items = append(items, normalItemStyle.Render(displayItem))
 		}
 	}
 

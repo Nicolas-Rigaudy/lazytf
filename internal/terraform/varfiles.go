@@ -81,3 +81,12 @@ func GetVarFileDisplayNames(varFiles []VarFile) []string {
 	}
 	return names
 }
+
+func FindVarFileByEnvName(envName string, varFiles []VarFile) (*VarFile, int) {
+	for i := range varFiles {
+		if varFiles[i].EnvName == envName {
+			return &varFiles[i], i
+		}
+	}
+	return nil, -1
+}

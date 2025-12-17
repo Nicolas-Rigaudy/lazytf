@@ -26,6 +26,7 @@ type ModalState struct {
 	Title     string
 	Message   string
 	OnConfirm func() tea.Msg // Called when user presses 'y' or Enter
+	OnCancel  func() tea.Msg // Called when user presses 'n' or Esc
 
 	// For ModalSelect
 	Items    []string
@@ -85,6 +86,10 @@ func (m Modal) Update(msg tea.Msg) (Modal, tea.Cmd) {
 				}
 			case "n", "esc":
 				m.state = ModalState{Type: ModalNone} // Close modal
+				if m.state.OnCancel != nil {
+					resultMsg := m.state.OnCancel()
+					return m, func() tea.Msg { return resultMsg }
+				}
 				return m, nil
 			}
 		}
