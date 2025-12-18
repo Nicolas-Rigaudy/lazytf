@@ -31,5 +31,5 @@ func RunInit(projectPath string, options InitOptions) tea.Cmd {
 	if !options.Input {
 		args = append(args, "-input=false")
 	}
-	return executeCommand(projectPath, args)
+	return executeCommandStreaming(projectPath, args)
 }

@@ -10,7 +10,8 @@ var (
 		Background(theme.Current.Mauve).
 		Foreground(theme.Current.Crust).
 		Bold(true).
-		Padding(0, 2)
+		Padding(0, 2).
+		Align(lipgloss.Center)
 )
 
 type TitleBarModel struct {

@@ -336,22 +336,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		selectedVarFile := &m.varFiles[msg.Index]
 		m.selectedVarFile = selectedVarFile
 
-		// Find matching backend configs
-		matchedBackends := terraform.MatchBackendsForEnv(selectedVarFile.EnvName, m.backendVarFiles)
-		backendInfo := terraform.FormatBackendInfo(matchedBackends)
-
 		// Determine initialization status for this environment
 		isThisEnvInitialized := m.backendState.IsInitialized && m.backendState.DetectedEnv == selectedVarFile.EnvName
-
-		// Build status string
-		var currentStatus string
-		if isThisEnvInitialized {
-			currentStatus = "✅ This environment is currently initialized"
-		} else if m.backendState.IsInitialized {
-			currentStatus = "⚠️  Different environment is initialized (" + m.backendState.DetectedEnv + ")"
-		} else {
-			currentStatus = "❌ Not initialized"
-		}
 
 		// If not initialized, show modal asking if they want to init
 		if !isThisEnvInitialized {
@@ -375,17 +361,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				},
 			})
 		}
-
-		m.mainPanel.Title = "🌍 Environment Details"
-		m.mainPanel.Content = "Environment: " + selectedVarFile.EnvName + "\n" +
-			"Status: " + currentStatus + "\n\n" +
-			"Var File: " + selectedVarFile.Name + "\n" +
-			"Full Path: " + selectedVarFile.FullPath + "\n\n" +
-			"Backend Configuration:\n" + backendInfo
-
-		// Update status bar
-		m.statusBar.SetText(m.buildStatusText())
-
 		return m, nil
 
 	case InitEnvironmentSelectedMsg:
@@ -459,40 +434,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case RunInitMsg:
+		m.mainPanel.Title = "⏳ Running Command"
+		m.mainPanel.Content = "$ terraform init -backend-config=" + msg.Options.BackendConfigFile.Name + "\n\n"
+
 		cmd := terraform.RunInit(msg.ProjectPath, msg.Options)
 		return m, cmd
 
+	case terraform.CommandOutputMsg:
+		// Handle streaming output - append each line as it arrives
+		m.mainPanel.Content += msg.Line + "\n"
+
+		// Return the ListenNext command to keep receiving messages
+		return m, msg.ListenNext
+
 	case terraform.CommandCompletedMsg:
-		// Update content with command output
-		m.mainPanel.Content = m.mainPanel.Content + "\n\n" + string(msg.Output)
+		// Command finished - update title and refresh state
+		m.mainPanel.Title = "✅ Command Completed"
+
+		// Refresh backend state to update sidebar indicators
 		m.backendState = terraform.DetectCurrentBackend(m.selectedProject.Path, m.backendVarFiles)
 		m.sidebar.InitializedEnv = m.backendState.DetectedEnv
 
-		return m, func() tea.Msg {
-			return VarFileSelectedMsg{
-				VarFileName: m.selectedVarFile.Name,
-				Index:       m.sidebar.SelectedIndex,
-			}
-		}
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// Calculate component heights
 		titleBarHeight := 1
 		statusBarHeight := 1
-		contentHeight := m.height - titleBarHeight - m.header.Height - statusBarHeight - 2
+		headerHeight := m.header.Height // Default 5, updates dynamically in View()
+
+		// JoinVertical adds newlines between components (title|header|content|status = 3 separators)
+		separatorLines := 3
+
+		// Available height for the content area (panels handle their own borders/padding)
+		totalContentHeight := m.height - titleBarHeight - headerHeight - statusBarHeight - separatorLines
+
+		// The panel height includes its border/padding, so we give it the full space
+		panelHeight := totalContentHeight
 
 		sidebarWidth := m.width / 4
 		mainPanelWidth := m.width - sidebarWidth - 4
 
 		m.titleBar.Width = m.width
 		m.statusBar.Width = m.width
-		m.sidebar.Width = sidebarWidth
-		m.sidebar.Height = contentHeight
-		m.mainPanel.Width = mainPanelWidth
-		m.mainPanel.Height = contentHeight
 		m.header.Width = m.width
+		m.sidebar.Width = sidebarWidth
+		m.sidebar.Height = panelHeight
+		m.mainPanel.Width = mainPanelWidth
+		m.mainPanel.Height = panelHeight
 	}
 	return m, nil
 }
