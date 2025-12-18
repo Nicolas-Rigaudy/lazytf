@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 )
 
 type InitOptions struct {
@@ -31,5 +33,5 @@ func RunInit(projectPath string, options InitOptions) tea.Cmd {
 	if !options.Input {
 		args = append(args, "-input=false")
 	}
-	return executeCommandStreaming(projectPath, args)
+	return executor.ExecuteStreaming("terraform", args, projectPath)
 }
