@@ -9,7 +9,9 @@ import (
 
 var (
 	headerContainerStyle = lipgloss.NewStyle().
-				Padding(0, 1)
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(theme.Current.Surface2).
+				Padding(1, 2)
 
 	headerLabelStyle = lipgloss.NewStyle().
 				Foreground(theme.Current.Mauve).
@@ -41,7 +43,7 @@ type InfoHeaderData struct {
 func NewHeader() HeaderModel {
 	return HeaderModel{
 		Width:  0,
-		Height: 3,
+		Height: 5, // Border (2) + Padding (2) + Content (1 line) = 5
 	}
 }
 
@@ -73,6 +75,8 @@ func (h HeaderModel) View(data InfoHeaderData) string {
 		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
 	}
 
-	h.Height = lipgloss.Height(content) + 1 // +1 for padding
-	return headerContainerStyle.Width(h.Width).Height(h.Height).Render(content)
+	// Render with border and padding
+	rendered := headerContainerStyle.Width(h.Width).Render(content)
+	h.Height = lipgloss.Height(rendered)
+	return rendered
 }

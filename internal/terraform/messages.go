@@ -1,8 +1,11 @@
 package terraform
 
+import tea "github.com/charmbracelet/bubbletea"
+
 type CommandOutputMsg struct {
-	Line  string
-	IsErr bool // true for stderr
+	Line       string
+	IsErr      bool // true for stderr
+	ListenNext tea.Cmd // Command to listen for next message
 }
 
 type CommandCompletedMsg struct {
