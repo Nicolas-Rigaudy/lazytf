@@ -1,4 +1,4 @@
-package terraform
+package executor
 
 import (
 	"bufio"
@@ -9,39 +9,24 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func executeCommand(projectPath string, args []string) tea.Cmd {
-	return func() tea.Msg {
-		cmd := exec.Command("terraform", args...)
-		cmd.Dir = projectPath
-		outputBytes, err := cmd.CombinedOutput()
-		output := string(outputBytes)
-		if err != nil {
-			return CommandErrorMsg{
-				Command: "terraform " + strings.Join(args, " "),
-				Error:   err,
-				Output:  output,
-			}
-		}
-		return CommandCompletedMsg{
-			Command:  "terraform " + strings.Join(args, " "),
-			ExitCode: 0,
-			Output:   output,
-		}
-	}
-}
-
-// executeCommandStreaming runs a command and streams output line-by-line
-func executeCommandStreaming(projectPath string, args []string) tea.Cmd {
+// ExecuteStreaming runs a command and streams output line-by-line
+// commandName: the executable to run (e.g., "terraform", "aws")
+// args: command arguments
+// workingDir: directory to run the command in (empty string for current dir)
+func ExecuteStreaming(commandName string, args []string, workingDir string) tea.Cmd {
 	// Create the command
-	cmd := exec.Command("terraform", args...)
-	cmd.Dir = projectPath
+	cmd := exec.Command(commandName, args...)
+	if workingDir != "" {
+		cmd.Dir = workingDir
+	}
+	cmdString := commandName + " " + strings.Join(args, " ")
 
 	// Get stdout and stderr pipes
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return func() tea.Msg {
 			return CommandErrorMsg{
-				Command: "terraform " + strings.Join(args, " "),
+				Command: cmdString,
 				Error:   err,
 				Output:  "Failed to create stdout pipe",
 			}
@@ -52,7 +37,7 @@ func executeCommandStreaming(projectPath string, args []string) tea.Cmd {
 	if err != nil {
 		return func() tea.Msg {
 			return CommandErrorMsg{
-				Command: "terraform " + strings.Join(args, " "),
+				Command: cmdString,
 				Error:   err,
 				Output:  "Failed to create stderr pipe",
 			}
@@ -64,7 +49,7 @@ func executeCommandStreaming(projectPath string, args []string) tea.Cmd {
 	if err != nil {
 		return func() tea.Msg {
 			return CommandErrorMsg{
-				Command: "terraform " + strings.Join(args, " "),
+				Command: cmdString,
 				Error:   err,
 				Output:  "Failed to start command",
 			}
@@ -111,7 +96,7 @@ func executeCommandStreaming(projectPath string, args []string) tea.Cmd {
 	}()
 
 	// Return a listener that will read from the channel
-	return listenToChannel(outputChannel, "terraform "+strings.Join(args, " "))
+	return listenToChannel(outputChannel, cmdString)
 }
 
 // listenToChannel creates a tea.Cmd that reads one message from a channel

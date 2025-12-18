@@ -1,6 +1,9 @@
 package ui
 
-import "github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
+import (
+	"github.com/Nicolas-Rigaudy/lazytf/internal/aws"
+	"github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
+)
 
 type ProjectSelectedMsg struct {
 	ProjectName string
@@ -25,4 +28,8 @@ type InitBackendSelectedMsg struct {
 type RunInitMsg struct {
 	ProjectPath string
 	Options     terraform.InitOptions
+}
+
+type RunAWSSSOLoginMsg struct {
+	Session *aws.SSOSession
 }

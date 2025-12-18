@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Nicolas-Rigaudy/lazytf/internal/aws"
+	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -120,6 +122,12 @@ func (m *Model) updateFocusStates() {
 	m.mainPanel.IsFocused = (m.focusIndex == 1)
 }
 
+// prepareCommandExecution clears the main panel and sets it up to display command output
+func (m *Model) prepareCommandExecution() {
+	m.mainPanel.Title = "⏳ Running Command"
+	m.mainPanel.Content = ""
+}
+
 // buildStatusText creates dynamic status bar text based on current state
 func (m Model) buildStatusText() string {
 	var parts []string
@@ -129,7 +137,7 @@ func (m Model) buildStatusText() string {
 		if m.mode == terraform.ModeMultiProject {
 			parts = append(parts, "Backspace: back", "│")
 		}
-		parts = append(parts, "i: init", "│")
+		parts = append(parts, "i: init", "l: aws login", "│")
 	}
 
 	parts = append(parts, "Tab: switch", "↑↓/jk: navigate", "Enter: select", "q: quit")
@@ -238,9 +246,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 				return m, nil
 			}
+
+		case "l":
+			// Trigger AWS SSO Login
+			sessions, err := aws.DiscoverSSOSessions()
+			if err != nil || len(sessions) == 0 {
+				m.modal.Show(ModalState{
+					Type:  ModalError,
+					Title: "❌ No AWS SSO Sessions Found",
+					ErrorText: "No AWS SSO sessions found in your AWS config file. Please configure at least one SSO session in ~/.aws/config " +
+						"before attempting to log in.",
+				})
+				return m, nil
+			}
+			switch len(sessions) {
+			case 1:
+				// Only one session, run login directly
+				m.prepareCommandExecution()
+				return m, aws.RunSSOLogin(sessions[0])
+			default:
+				// Multiple sessions, show selection modal
+				var sessionNames []string
+				for _, session := range sessions {
+					sessionNames = append(sessionNames, session.Name)
+				}
+				m.modal.Show(ModalState{
+					Type:    ModalSelect,
+					Title:   "AWS SSO Login",
+					Message: "Select an AWS SSO session to log in:",
+					Items:   sessionNames,
+					OnSelect: func(index int) tea.Msg {
+						return RunAWSSSOLoginMsg{
+							Session: sessions[index],
+						}
+					},
+				})
+				return m, nil
+			}
+
 		case "tab":
 			m.focusIndex = (m.focusIndex + 1) % m.focusableCount
 			m.updateFocusStates()
+
 		case "backspace", "esc", "p":
 			// Only go back if we're in ViewModeProjectDetail
 			if m.viewMode == ViewModeProjectDetail {
@@ -434,20 +481,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case RunInitMsg:
-		m.mainPanel.Title = "⏳ Running Command"
-		m.mainPanel.Content = "$ terraform init -backend-config=" + msg.Options.BackendConfigFile.Name + "\n\n"
-
+		m.prepareCommandExecution()
 		cmd := terraform.RunInit(msg.ProjectPath, msg.Options)
 		return m, cmd
 
-	case terraform.CommandOutputMsg:
+	case RunAWSSSOLoginMsg:
+		m.prepareCommandExecution()
+		return m, aws.RunSSOLogin(msg.Session)
+
+	case executor.CommandOutputMsg:
 		// Handle streaming output - append each line as it arrives
 		m.mainPanel.Content += msg.Line + "\n"
 
 		// Return the ListenNext command to keep receiving messages
 		return m, msg.ListenNext
 
-	case terraform.CommandCompletedMsg:
+	case executor.CommandCompletedMsg:
 		// Command finished - update title and refresh state
 		m.mainPanel.Title = "✅ Command Completed"
 
