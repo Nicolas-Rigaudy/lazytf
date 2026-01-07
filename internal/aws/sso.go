@@ -2,10 +2,13 @@ package aws
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // SSOSession represents an AWS SSO session configuration
@@ -67,4 +70,19 @@ func DiscoverSSOSessions() ([]*SSOSession, error) {
 	}
 
 	return sessions, nil
+}
+
+// IsLoggedIn checks if AWS SSO credentials are available and valid
+// Returns true if credentials work, false otherwise
+func IsLoggedIn() bool {
+	// Run a quick AWS command with a 2-second timeout to check credentials
+	// This is faster than the default timeout and validates the credentials actually work
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "aws", "sts", "get-caller-identity", "--output", "json")
+	err := cmd.Run()
+
+	// If the command succeeded, credentials are valid
+	return err == nil
 }

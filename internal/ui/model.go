@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,25 +21,26 @@ const (
 )
 
 type Model struct {
-	sidebar             SidebarModel
-	mainPanel           MainPanelModel
-	titleBar            TitleBarModel
-	statusBar           StatusBarModel
-	header              HeaderModel
-	focusIndex          int
-	focusableCount      int
-	width               int
-	height              int
-	projects            []terraform.Project
-	mode                terraform.Mode
-	viewMode            ViewMode
-	selectedProject     *terraform.Project
-	varFiles            []terraform.VarFile
-	selectedVarFile     *terraform.VarFile
-	backendVarFiles     []terraform.BackendVarFile
-	selectedBackendFile *terraform.BackendVarFile
-	backendState        terraform.BackendState
-	modal               Modal // Modal component
+	sidebar                  SidebarModel
+	mainPanel                MainPanelModel
+	titleBar                 TitleBarModel
+	statusBar                StatusBarModel
+	header                   HeaderModel
+	focusIndex               int
+	focusableCount           int
+	width                    int
+	height                   int
+	projects                 []terraform.Project
+	mode                     terraform.Mode
+	viewMode                 ViewMode
+	selectedProject          *terraform.Project
+	varFiles                 []terraform.VarFile
+	selectedVarFile          *terraform.VarFile
+	backendVarFiles          []terraform.BackendVarFile
+	selectedBackendFile      *terraform.BackendVarFile
+	backendState             terraform.BackendState
+	modal                    Modal           // Modal component
+	pendingTerraformCommand  func() tea.Msg  // Command to run after AWS login completes
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
@@ -125,7 +127,81 @@ func (m *Model) updateFocusStates() {
 // prepareCommandExecution clears the main panel and sets it up to display command output
 func (m *Model) prepareCommandExecution() {
 	m.mainPanel.Title = "⏳ Running Command"
-	m.mainPanel.Content = ""
+	m.mainPanel.SetContent("")
+	m.mainPanel.HasError = false
+}
+
+// triggerAWSLogin initiates the AWS SSO login workflow
+// Returns a tea.Cmd to execute, or nil if showing a modal
+func (m *Model) triggerAWSLogin() tea.Cmd {
+	sessions, err := aws.DiscoverSSOSessions()
+	if err != nil || len(sessions) == 0 {
+		m.modal.Show(ModalState{
+			Type:  ModalError,
+			Title: "❌ No AWS SSO Sessions Found",
+			ErrorText: "No AWS SSO sessions found in your AWS config file. Please configure at least one SSO session in ~/.aws/config " +
+				"before attempting to log in.",
+		})
+		return nil
+	}
+
+	if len(sessions) == 1 {
+		// Only one session, run login directly
+		m.prepareCommandExecution()
+		return aws.RunSSOLogin(sessions[0])
+	}
+
+	// Multiple sessions, show selection modal
+	var sessionNames []string
+	for _, session := range sessions {
+		sessionNames = append(sessionNames, session.Name)
+	}
+	m.modal.Show(ModalState{
+		Type:    ModalSelect,
+		Title:   "AWS SSO Login",
+		Message: "Select an AWS SSO session to log in:",
+		Items:   sessionNames,
+		OnSelect: func(index int) tea.Msg {
+			return RunAWSSSOLoginMsg{
+				Session: sessions[index],
+			}
+		},
+	})
+	return nil
+}
+
+// detectCommonErrors checks command output for common error patterns
+// Returns true if an error was detected and handled with a modal
+func (m *Model) detectCommonErrors() bool {
+	output := m.mainPanel.Content
+
+	// Check for AWS credential errors
+	if strings.Contains(output, "No valid credential sources found") ||
+		strings.Contains(output, "Unable to locate credentials") {
+		// Store the last command to retry after login
+		m.modal.Show(ModalState{
+			Type:    ModalConfirm,
+			Title:   "🔐 AWS Authentication Required",
+			Message: "AWS credentials are not available or have expired.\n\nWould you like to log in now?",
+			OnConfirm: func() tea.Msg {
+				return TriggerAWSLoginMsg{}
+			},
+		})
+		return true
+	}
+
+	// Check for backend not initialized
+	if strings.Contains(output, "Backend initialization required") ||
+		strings.Contains(output, "terraform init") {
+		m.modal.Show(ModalState{
+			Type:      ModalError,
+			Title:     "❌ Terraform Not Initialized",
+			ErrorText: "Please run terraform init (press 'i') before running this command.",
+		})
+		return true
+	}
+
+	return false
 }
 
 // buildStatusText creates dynamic status bar text based on current state
@@ -137,7 +213,7 @@ func (m Model) buildStatusText() string {
 		if m.mode == terraform.ModeMultiProject {
 			parts = append(parts, "Backspace: back", "│")
 		}
-		parts = append(parts, "i: init", "l: aws login", "│")
+		parts = append(parts, "i: init", "p: plan", "l: aws login", "│")
 	}
 
 	parts = append(parts, "Tab: switch", "↑↓/jk: navigate", "Enter: select", "q: quit")
@@ -249,46 +325,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "l":
 			// Trigger AWS SSO Login
-			sessions, err := aws.DiscoverSSOSessions()
-			if err != nil || len(sessions) == 0 {
-				m.modal.Show(ModalState{
-					Type:  ModalError,
-					Title: "❌ No AWS SSO Sessions Found",
-					ErrorText: "No AWS SSO sessions found in your AWS config file. Please configure at least one SSO session in ~/.aws/config " +
-						"before attempting to log in.",
-				})
-				return m, nil
-			}
-			switch len(sessions) {
-			case 1:
-				// Only one session, run login directly
-				m.prepareCommandExecution()
-				return m, aws.RunSSOLogin(sessions[0])
-			default:
-				// Multiple sessions, show selection modal
-				var sessionNames []string
-				for _, session := range sessions {
-					sessionNames = append(sessionNames, session.Name)
+			return m, m.triggerAWSLogin()
+
+		case "p":
+			// Trigger Terraform Plan
+			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil && m.selectedVarFile != nil {
+				// Check if the environment is initialized first
+				if !m.backendState.IsInitialized || m.backendState.DetectedEnv != m.selectedVarFile.EnvName {
+					m.modal.Show(ModalState{
+						Type:      ModalError,
+						Title:     "❌ Environment Not Initialized",
+						ErrorText: "Please run terraform init (press 'i') before running plan.",
+					})
+					return m, nil
 				}
-				m.modal.Show(ModalState{
-					Type:    ModalSelect,
-					Title:   "AWS SSO Login",
-					Message: "Select an AWS SSO session to log in:",
-					Items:   sessionNames,
-					OnSelect: func(index int) tea.Msg {
-						return RunAWSSSOLoginMsg{
-							Session: sessions[index],
-						}
-					},
-				})
-				return m, nil
+
+				// Run plan - AWS credential check happens reactively if command fails
+				m.prepareCommandExecution()
+				return m, func() tea.Msg {
+					return RunPlanMsg{
+						ProjectPath: m.selectedProject.Path,
+						VarFile:     *m.selectedVarFile,
+					}
+				}
 			}
 
 		case "tab":
 			m.focusIndex = (m.focusIndex + 1) % m.focusableCount
 			m.updateFocusStates()
 
-		case "backspace", "esc", "p":
+		case "backspace", "esc":
 			// Only go back if we're in ViewModeProjectDetail
 			if m.viewMode == ViewModeProjectDetail {
 				m.viewMode = ViewModeProjectList
@@ -365,13 +431,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update main panel with title and content
 		m.mainPanel.Title = "📋 Project Details"
 		backendStateInfo := terraform.FormatBackendState(m.backendState)
-		m.mainPanel.Content = "Project: " + selectedProject.Name + "\n" +
+		content := "Project: " + selectedProject.Name + "\n" +
 			"Path: " + selectedProject.Path + "\n\n" +
 			"--- Backend Status ---\n" +
 			backendStateInfo + "\n" +
 			"--- Available Environments ---\n" +
 			"Var Files: " + string(rune(len(m.varFiles)+'0')) + "\n" +
 			"Backend Configs: " + string(rune(len(m.backendVarFiles)+'0'))
+		m.mainPanel.SetContent(content)
 
 		// Update status bar
 		m.statusBar.SetText(m.buildStatusText())
@@ -481,17 +548,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case RunInitMsg:
+		// Store command in case we need to retry after AWS login
+		m.pendingTerraformCommand = func() tea.Msg {
+			return RunInitMsg{
+				ProjectPath: msg.ProjectPath,
+				Options:     msg.Options,
+			}
+		}
+		// Run init - AWS credential check happens reactively if command fails
 		m.prepareCommandExecution()
 		cmd := terraform.RunInit(msg.ProjectPath, msg.Options)
 		return m, cmd
+
+	case TriggerAWSLoginMsg:
+		// Trigger the AWS login workflow
+		return m, m.triggerAWSLogin()
 
 	case RunAWSSSOLoginMsg:
 		m.prepareCommandExecution()
 		return m, aws.RunSSOLogin(msg.Session)
 
+	case RunPlanMsg:
+		// Store command in case we need to retry after AWS login
+		m.pendingTerraformCommand = func() tea.Msg {
+			return RunPlanMsg{
+				ProjectPath: msg.ProjectPath,
+				VarFile:     msg.VarFile,
+			}
+		}
+		m.prepareCommandExecution()
+		cmd := terraform.RunPlan(msg.ProjectPath, msg.VarFile)
+		return m, cmd
+
 	case executor.CommandOutputMsg:
-		// Handle streaming output - append each line as it arrives
+		// Append output as-is (preserves terraform/aws ANSI colors)
 		m.mainPanel.Content += msg.Line + "\n"
+		m.mainPanel.SetContent(m.mainPanel.Content)
 
 		// Return the ListenNext command to keep receiving messages
 		return m, msg.ListenNext
@@ -499,10 +591,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case executor.CommandCompletedMsg:
 		// Command finished - update title and refresh state
 		m.mainPanel.Title = "✅ Command Completed"
+		m.mainPanel.HasError = false
 
-		// Refresh backend state to update sidebar indicators
-		m.backendState = terraform.DetectCurrentBackend(m.selectedProject.Path, m.backendVarFiles)
-		m.sidebar.InitializedEnv = m.backendState.DetectedEnv
+		// Refresh backend state to update sidebar indicators (only if we have a project)
+		if m.selectedProject != nil {
+			m.backendState = terraform.DetectCurrentBackend(m.selectedProject.Path, m.backendVarFiles)
+			m.sidebar.InitializedEnv = m.backendState.DetectedEnv
+		}
+
+		// If there's a pending terraform command (after AWS login), execute it now
+		if m.pendingTerraformCommand != nil {
+			cmd := m.pendingTerraformCommand
+			m.pendingTerraformCommand = nil // Clear it
+			return m, cmd
+		}
+
+		return m, nil
+
+	case executor.CommandErrorMsg:
+		m.mainPanel.Title = fmt.Sprintf("❌ Command Failed (exit code %d)", msg.ExitCode)
+		m.mainPanel.HasError = true
+
+		// Detect common errors and show helpful modals
+		m.detectCommonErrors()
 
 		return m, nil
 
@@ -532,8 +643,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.header.Width = m.width
 		m.sidebar.Width = sidebarWidth
 		m.sidebar.Height = panelHeight
-		m.mainPanel.Width = mainPanelWidth
-		m.mainPanel.Height = panelHeight
+		m.mainPanel.SetSize(mainPanelWidth, panelHeight)
 	}
 	return m, nil
 }

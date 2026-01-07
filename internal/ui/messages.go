@@ -33,3 +33,11 @@ type RunInitMsg struct {
 type RunAWSSSOLoginMsg struct {
 	Session *aws.SSOSession
 }
+
+type RunPlanMsg struct {
+	ProjectPath string
+	VarFile     terraform.VarFile
+}
+
+type TriggerAWSLoginMsg struct{}
+
