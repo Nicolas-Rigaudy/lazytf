@@ -18,7 +18,8 @@ type CommandCompletedMsg struct {
 
 // CommandErrorMsg is sent when a command fails
 type CommandErrorMsg struct {
-	Command string
-	Error   error
-	Output  string
+	Command  string
+	Error    error
+	Output   string
+	ExitCode int
 }
