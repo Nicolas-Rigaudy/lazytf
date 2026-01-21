@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,6 +20,15 @@ const (
 	ViewModeProjectList ViewMode = iota
 	ViewModeProjectDetail
 )
+
+// InteractiveCommand tracks state for commands that need user confirmation
+type InteractiveCommand struct {
+	StdinWriter   io.WriteCloser // Writer to send input to the command
+	OutputBuffer  string         // Buffered output before confirmation
+	CommandName   string         // Name of the command (e.g., "apply", "destroy")
+	IsWaiting     bool           // True when waiting for user confirmation
+	ListenNext    tea.Cmd        // Next listener command to continue receiving output
+}
 
 type Model struct {
 	sidebar                  SidebarModel
@@ -39,8 +49,10 @@ type Model struct {
 	backendVarFiles          []terraform.BackendVarFile
 	selectedBackendFile      *terraform.BackendVarFile
 	backendState             terraform.BackendState
-	modal                    Modal           // Modal component
-	pendingTerraformCommand  func() tea.Msg  // Command to run after AWS login completes
+	modal                    Modal              // Modal component
+	lastCommandMsg           tea.Msg            // Last terraform command message (for retry after AWS login)
+	pendingTerraformCommand  func() tea.Msg     // Command to run after AWS login completes (set by detectCommonErrors)
+	interactiveCmd           *InteractiveCommand // Tracks state for interactive commands (apply, destroy, etc.)
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
@@ -178,7 +190,13 @@ func (m *Model) detectCommonErrors() bool {
 	// Check for AWS credential errors
 	if strings.Contains(output, "No valid credential sources found") ||
 		strings.Contains(output, "Unable to locate credentials") {
-		// Store the last command to retry after login
+		// Set pending command to retry after AWS login
+		if m.lastCommandMsg != nil {
+			m.pendingTerraformCommand = func() tea.Msg {
+				return m.lastCommandMsg
+			}
+		}
+
 		m.modal.Show(ModalState{
 			Type:    ModalConfirm,
 			Title:   "🔐 AWS Authentication Required",
@@ -213,7 +231,7 @@ func (m Model) buildStatusText() string {
 		if m.mode == terraform.ModeMultiProject {
 			parts = append(parts, "Backspace: back", "│")
 		}
-		parts = append(parts, "i: init", "p: plan", "l: aws login", "│")
+		parts = append(parts, "i: init", "p: plan", "a: apply", "l: aws login", "│")
 	}
 
 	parts = append(parts, "Tab: switch", "↑↓/jk: navigate", "Enter: select", "q: quit")
@@ -344,6 +362,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.prepareCommandExecution()
 				return m, func() tea.Msg {
 					return RunPlanMsg{
+						ProjectPath: m.selectedProject.Path,
+						VarFile:     *m.selectedVarFile,
+					}
+				}
+			}
+
+		case "a":
+			// Trigger Terraform Apply
+			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil && m.selectedVarFile != nil {
+				// Check if the environment is initialized first
+				if !m.backendState.IsInitialized || m.backendState.DetectedEnv != m.selectedVarFile.EnvName {
+					m.modal.Show(ModalState{
+						Type:      ModalError,
+						Title:     "❌ Environment Not Initialized",
+						ErrorText: "Please run terraform init (press 'i') before running apply.",
+					})
+					return m, nil
+				}
+
+				// Run apply - will show plan and wait for confirmation
+				m.prepareCommandExecution()
+				return m, func() tea.Msg {
+					return RunApplyMsg{
 						ProjectPath: m.selectedProject.Path,
 						VarFile:     *m.selectedVarFile,
 					}
@@ -548,17 +589,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case RunInitMsg:
-		// Store command in case we need to retry after AWS login
-		m.pendingTerraformCommand = func() tea.Msg {
-			return RunInitMsg{
-				ProjectPath: msg.ProjectPath,
-				Options:     msg.Options,
-			}
-		}
-		// Run init - AWS credential check happens reactively if command fails
+		// Store this command in case we need to retry after AWS login
+		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
 		cmd := terraform.RunInit(msg.ProjectPath, msg.Options)
 		return m, cmd
+
+	case ApplyConfirmedMsg:
+		if m.interactiveCmd == nil || m.interactiveCmd.StdinWriter == nil {
+			return m, nil
+		}
+
+		// User confirmed apply - send "yes" to terraform stdin
+		m.mainPanel.Title = "🚀 Applying changes..."
+
+		// Save the listener before modifying state
+		listenNext := m.interactiveCmd.ListenNext
+
+		// Write to stdin and close
+		writer := m.interactiveCmd.StdinWriter
+		writer.Write([]byte("yes\n"))
+		writer.Close()
+
+		// Clear interactiveCmd - we're done with the interactive flow
+		m.interactiveCmd = nil
+
+		// Continue listening for terraform's output
+		return m, listenNext
+
+	case ApplyCancelledMsg:
+		// User cancelled apply - send "no" to terraform stdin to abort gracefully
+		if m.interactiveCmd != nil && m.interactiveCmd.StdinWriter != nil {
+			m.mainPanel.Title = "⛔ Apply cancelled"
+			m.mainPanel.Content += "\n[Cancelling apply...]\n"
+			m.mainPanel.SetContent(m.mainPanel.Content)
+
+			// Save the listener before modifying state
+			listenNext := m.interactiveCmd.ListenNext
+
+			// Write to stdin in goroutine to avoid blocking
+			writer := m.interactiveCmd.StdinWriter
+			go func() {
+				writer.Write([]byte("no\n"))
+				writer.Close()
+			}()
+
+			// Clear interactiveCmd - we're done with the interactive flow
+			m.interactiveCmd = nil
+
+			// Continue listening for terraform's output
+			return m, listenNext
+		}
+		return m, nil
 
 	case TriggerAWSLoginMsg:
 		// Trigger the AWS login workflow
@@ -569,29 +651,88 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, aws.RunSSOLogin(msg.Session)
 
 	case RunPlanMsg:
-		// Store command in case we need to retry after AWS login
-		m.pendingTerraformCommand = func() tea.Msg {
-			return RunPlanMsg{
-				ProjectPath: msg.ProjectPath,
-				VarFile:     msg.VarFile,
-			}
-		}
+		// Store this command in case we need to retry after AWS login
+		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
 		cmd := terraform.RunPlan(msg.ProjectPath, msg.VarFile)
 		return m, cmd
 
+	case RunApplyMsg:
+		// Store this command in case we need to retry after AWS login
+		m.lastCommandMsg = msg
+		m.prepareCommandExecution()
+
+		// Run terraform apply (without auto-approve) - returns stdin writer
+		result := terraform.RunApply(msg.ProjectPath, msg.VarFile)
+
+		// Store the interactive command state
+		m.interactiveCmd = &InteractiveCommand{
+			StdinWriter:  result.StdinWriter,
+			OutputBuffer: "",
+			CommandName:  "apply",
+			IsWaiting:    false, // Will become true when we detect the confirmation prompt
+		}
+
+		return m, result.Cmd
+
 	case executor.CommandOutputMsg:
-		// Append output as-is (preserves terraform/aws ANSI colors)
+		// Debug: show all output regardless of state
 		m.mainPanel.Content += msg.Line + "\n"
 		m.mainPanel.SetContent(m.mainPanel.Content)
 
-		// Return the ListenNext command to keep receiving messages
+		// If we have an interactive command running, also buffer the output
+		if m.interactiveCmd != nil && !m.interactiveCmd.IsWaiting {
+			m.interactiveCmd.OutputBuffer += msg.Line + "\n"
+			// Store the listener so we can continue after modal interaction
+			m.interactiveCmd.ListenNext = msg.ListenNext
+
+			// Detect terraform's confirmation prompt
+			// Note: "Enter a value:" never arrives as a complete line (no newline until we respond)
+			// so we detect on "Only 'yes' will be accepted" which comes before the prompt
+			lineLower := strings.ToLower(strings.TrimSpace(msg.Line))
+			if strings.Contains(lineLower, "only 'yes' will be accepted") {
+				// Switch to waiting state and show confirmation modal
+				m.interactiveCmd.IsWaiting = true
+
+				// Show confirmation modal
+				envName := ""
+				if m.selectedVarFile != nil {
+					envName = m.selectedVarFile.EnvName
+				}
+
+				m.modal.Show(ModalState{
+					Type:    ModalConfirm,
+					Title:   fmt.Sprintf("🚀 Apply changes to %s?", envName),
+					Message: "Confirm to proceed with apply, or cancel to abort.",
+					OnConfirm: func() tea.Msg {
+						return ApplyConfirmedMsg{}
+					},
+					OnCancel: func() tea.Msg {
+						return ApplyCancelledMsg{}
+					},
+				})
+
+				return m, msg.ListenNext
+			}
+
+			return m, msg.ListenNext
+		}
+
+		// Keep listening for more output
 		return m, msg.ListenNext
 
 	case executor.CommandCompletedMsg:
 		// Command finished - update title and refresh state
 		m.mainPanel.Title = "✅ Command Completed"
 		m.mainPanel.HasError = false
+
+		// Clean up interactive command state
+		if m.interactiveCmd != nil {
+			if m.interactiveCmd.StdinWriter != nil {
+				m.interactiveCmd.StdinWriter.Close()
+			}
+			m.interactiveCmd = nil
+		}
 
 		// Refresh backend state to update sidebar indicators (only if we have a project)
 		if m.selectedProject != nil {
@@ -611,6 +752,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case executor.CommandErrorMsg:
 		m.mainPanel.Title = fmt.Sprintf("❌ Command Failed (exit code %d)", msg.ExitCode)
 		m.mainPanel.HasError = true
+
+		// Clean up interactive command state
+		if m.interactiveCmd != nil {
+			if m.interactiveCmd.StdinWriter != nil {
+				m.interactiveCmd.StdinWriter.Close()
+			}
+			m.interactiveCmd = nil
+		}
 
 		// Detect common errors and show helpful modals
 		m.detectCommonErrors()

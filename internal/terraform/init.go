@@ -33,5 +33,7 @@ func RunInit(projectPath string, options InitOptions) tea.Cmd {
 	if !options.Input {
 		args = append(args, "-input=false")
 	}
-	return executor.ExecuteStreaming("terraform", args, projectPath)
+
+	result := executor.ExecuteStreaming("terraform", args, projectPath, false)
+	return result.Cmd
 }
