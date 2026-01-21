@@ -54,6 +54,7 @@ func NewMainPanel() MainPanelModel {
 	vp.KeyMap = viewport.DefaultKeyMap()
 	vp.YPosition = 0
 	vp.Style = lipgloss.NewStyle().UnsetMaxWidth() // Allow full width rendering
+	vp.SetHorizontalStep(6)
 	return MainPanelModel{
 		Content:   "Main Panel Content",
 		Width:     0,
