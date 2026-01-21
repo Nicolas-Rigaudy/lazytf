@@ -15,5 +15,6 @@ func RunPlan(projectPath string, varFile VarFile) tea.Cmd {
 		args = append(args, fmt.Sprintf("-var-file=%s", varFile.FullPath))
 	}
 
-	return executor.ExecuteStreaming("terraform", args, projectPath)
+	result := executor.ExecuteStreaming("terraform", args, projectPath, false)
+	return result.Cmd
 }

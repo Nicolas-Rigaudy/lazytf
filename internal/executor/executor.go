@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bufio"
+	"io"
 	"os/exec"
 	"strings"
 	"sync"
@@ -9,11 +10,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// ExecuteResult contains the tea.Cmd and an optional stdin writer
+type ExecuteResult struct {
+	Cmd         tea.Cmd
+	StdinWriter io.WriteCloser // nil if command doesn't need stdin
+}
+
 // ExecuteStreaming runs a command and streams output line-by-line
 // commandName: the executable to run (e.g., "terraform", "aws")
 // args: command arguments
 // workingDir: directory to run the command in (empty string for current dir)
-func ExecuteStreaming(commandName string, args []string, workingDir string) tea.Cmd {
+// withStdin: if true, returns a stdin writer for sending input to the command
+func ExecuteStreaming(commandName string, args []string, workingDir string, withStdin bool) ExecuteResult {
 	// Create the command
 	cmd := exec.Command(commandName, args...)
 	if workingDir != "" {
@@ -24,22 +32,46 @@ func ExecuteStreaming(commandName string, args []string, workingDir string) tea.
 	// Get stdout and stderr pipes
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return func() tea.Msg {
-			return CommandErrorMsg{
-				Command: cmdString,
-				Error:   err,
-				Output:  "Failed to create stdout pipe",
-			}
+		return ExecuteResult{
+			Cmd: func() tea.Msg {
+				return CommandErrorMsg{
+					Command: cmdString,
+					Error:   err,
+					Output:  "Failed to create stdout pipe",
+				}
+			},
+			StdinWriter: nil,
 		}
 	}
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return func() tea.Msg {
-			return CommandErrorMsg{
-				Command: cmdString,
-				Error:   err,
-				Output:  "Failed to create stderr pipe",
+		return ExecuteResult{
+			Cmd: func() tea.Msg {
+				return CommandErrorMsg{
+					Command: cmdString,
+					Error:   err,
+					Output:  "Failed to create stderr pipe",
+				}
+			},
+			StdinWriter: nil,
+		}
+	}
+
+	// Get stdin pipe if requested - must be done BEFORE cmd.Start()
+	var stdinPipe io.WriteCloser
+	if withStdin {
+		stdinPipe, err = cmd.StdinPipe()
+		if err != nil {
+			return ExecuteResult{
+				Cmd: func() tea.Msg {
+					return CommandErrorMsg{
+						Command: cmdString,
+						Error:   err,
+						Output:  "Failed to create stdin pipe",
+					}
+				},
+				StdinWriter: nil,
 			}
 		}
 	}
@@ -47,12 +79,15 @@ func ExecuteStreaming(commandName string, args []string, workingDir string) tea.
 	// Start the command (non-blocking)
 	err = cmd.Start()
 	if err != nil {
-		return func() tea.Msg {
-			return CommandErrorMsg{
-				Command: cmdString,
-				Error:   err,
-				Output:  "Failed to start command",
-			}
+		return ExecuteResult{
+			Cmd: func() tea.Msg {
+				return CommandErrorMsg{
+					Command: cmdString,
+					Error:   err,
+					Output:  "Failed to start command",
+				}
+			},
+			StdinWriter: nil,
 		}
 	}
 
@@ -125,8 +160,11 @@ func ExecuteStreaming(commandName string, args []string, workingDir string) tea.
 		close(outputChannel) // NOW it's safe to close the channel
 	}()
 
-	// Return a listener that will read from the channel
-	return listenToChannel(outputChannel, cmdString)
+	// Return a listener that will read from the channel and the stdin writer
+	return ExecuteResult{
+		Cmd:         listenToChannel(outputChannel, cmdString),
+		StdinWriter: stdinPipe, // Will be nil if withStdin was false
+	}
 }
 
 // listenToChannel creates a tea.Cmd that reads one message from a channel

@@ -9,5 +9,6 @@ import (
 // This command opens a browser for authentication
 func RunSSOLogin(session *SSOSession) tea.Cmd {
 	args := []string{"sso", "login", "--sso-session", session.Name}
-	return executor.ExecuteStreaming("aws", args, "")
+	result := executor.ExecuteStreaming("aws", args, "", false)
+	return result.Cmd
 }

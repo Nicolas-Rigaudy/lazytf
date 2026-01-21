@@ -85,9 +85,11 @@ func (m Modal) Update(msg tea.Msg) (Modal, tea.Cmd) {
 					return m, func() tea.Msg { return resultMsg }
 				}
 			case "n", "esc":
+				// Save OnCancel before clearing state
+				onCancel := m.state.OnCancel
 				m.state = ModalState{Type: ModalNone} // Close modal
-				if m.state.OnCancel != nil {
-					resultMsg := m.state.OnCancel()
+				if onCancel != nil {
+					resultMsg := onCancel()
 					return m, func() tea.Msg { return resultMsg }
 				}
 				return m, nil

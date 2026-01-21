@@ -39,5 +39,14 @@ type RunPlanMsg struct {
 	VarFile     terraform.VarFile
 }
 
+type RunApplyMsg struct {
+	ProjectPath string
+	VarFile     terraform.VarFile
+}
+
 type TriggerAWSLoginMsg struct{}
+
+type ApplyConfirmedMsg struct{}
+
+type ApplyCancelledMsg struct{}
 
