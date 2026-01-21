@@ -231,10 +231,10 @@ func (m Model) buildStatusText() string {
 		if m.mode == terraform.ModeMultiProject {
 			parts = append(parts, "Backspace: back", "│")
 		}
-		parts = append(parts, "i: init", "p: plan", "a: apply", "l: aws login", "│")
+		parts = append(parts, "i: init", "p: plan", "a: apply", "shift+l: aws login", "│")
 	}
 
-	parts = append(parts, "Tab: switch", "↑↓/jk: navigate", "Enter: select", "q: quit")
+	parts = append(parts, "Tab: switch", "↑↓/jk: navigate", "Enter: select", "b: collapse sidebar", "q: quit")
 
 	return strings.Join(parts, " ")
 }
@@ -341,7 +341,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		case "l":
+		case "L":
 			// Trigger AWS SSO Login
 			return m, m.triggerAWSLogin()
 
@@ -453,6 +453,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
+			}
+
+		case "b":
+			// Collapse sidebar
+			m.sidebar.IsCollapsed = !m.sidebar.IsCollapsed
+			return m, func() tea.Msg {
+				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
 			}
 		}
 
@@ -810,7 +817,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The panel height includes its border/padding, so we give it the full space
 		panelHeight := totalContentHeight
 
-		sidebarWidth := m.width / 4
+		sidebarWidth := 28
+		if m.sidebar.IsCollapsed {
+			sidebarWidth = 8 // Collapsed width: border(2) + padding(2) + content(~4) + buffer
+		}
 		mainPanelWidth := m.width - sidebarWidth - 4
 
 		m.titleBar.Width = m.width

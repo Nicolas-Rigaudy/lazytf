@@ -41,6 +41,7 @@ type SidebarModel struct {
 	Width          int
 	Height         int
 	IsFocused      bool
+	IsCollapsed    bool
 	InitializedEnv string
 }
 
@@ -71,34 +72,71 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 	return m, nil
 }
 
+// renderWithStyle applies the appropriate border style based on focus state
+func (m SidebarModel) renderWithStyle(content string) string {
+	style := sidebarUnfocusedStyle
+	if m.IsFocused {
+		style = sidebarFocusedStyle
+	}
+	return style.Width(m.Width).Height(m.Height).Render(content)
+}
+
+// renderItem renders a single item with selection highlighting
+func (m SidebarModel) renderItem(index int, display string) string {
+	if index == m.SelectedIndex {
+		return highlightedItemStyle.Render(display)
+	}
+	return normalItemStyle.Render(display)
+}
+
+// isInitialized checks if the given item is the initialized environment
+func (m SidebarModel) isInitialized(item string) bool {
+	return m.InitializedEnv != "" && item == m.InitializedEnv
+}
+
 func (m SidebarModel) View() string {
 	var parts []string
-	if m.Title != "" {
-		parts = append(parts, sidebarTitleStyle.Render("🎯 Project: "+m.Title))
-		parts = append(parts, "") // Add a blank line after title
-	}
 
-	items := []string{}
-	for i, item := range m.Items {
-		// Add ✅ indicator if this env is initialized
-		displayItem := item
-		if m.InitializedEnv != "" && item == m.InitializedEnv {
-			displayItem = item + " ✅ Initialized"
+	if m.IsCollapsed {
+		// Mini title - first 5 chars
+		if m.Title != "" {
+			miniTitle := m.Title
+			if len(miniTitle) > 5 {
+				miniTitle = miniTitle[:5]
+			}
+			parts = append(parts, sidebarTitleStyle.Render(miniTitle))
 		}
 
-		if i == m.SelectedIndex {
-			items = append(items, highlightedItemStyle.Render(displayItem))
-		} else {
-			items = append(items, normalItemStyle.Render(displayItem))
+		// Collapsed items - first letter with arrow and checkmark
+		for i, item := range m.Items {
+			suffix := " " // Space to match checkmark width
+			if m.isInitialized(item) {
+				suffix = "✅"
+			}
+			display := string(item[0]) + suffix
+			// Use simpler styles without padding for collapsed view
+			if i == m.SelectedIndex {
+				parts = append(parts, highlightedItemStyle.Render(display))
+			} else {
+				parts = append(parts, normalItemStyle.Render(display))
+			}
+		}
+	} else {
+		// Full title
+		if m.Title != "" {
+			parts = append(parts, sidebarTitleStyle.Render("Project: "+m.Title))
+		}
+
+		// Expanded items - full name with initialized indicator
+		for i, item := range m.Items {
+			display := item
+			if m.isInitialized(item) {
+				display += " ✅ Initialized"
+			}
+			parts = append(parts, m.renderItem(i, display))
 		}
 	}
-
-	parts = append(parts, items...)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
-
-	if m.IsFocused {
-		return sidebarFocusedStyle.Width(m.Width).Height(m.Height).Render(content)
-	}
-	return sidebarUnfocusedStyle.Width(m.Width).Height(m.Height).Render(content)
+	return m.renderWithStyle(content)
 }
