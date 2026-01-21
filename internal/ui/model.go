@@ -23,36 +23,36 @@ const (
 
 // InteractiveCommand tracks state for commands that need user confirmation
 type InteractiveCommand struct {
-	StdinWriter   io.WriteCloser // Writer to send input to the command
-	OutputBuffer  string         // Buffered output before confirmation
-	CommandName   string         // Name of the command (e.g., "apply", "destroy")
-	IsWaiting     bool           // True when waiting for user confirmation
-	ListenNext    tea.Cmd        // Next listener command to continue receiving output
+	StdinWriter  io.WriteCloser // Writer to send input to the command
+	OutputBuffer string         // Buffered output before confirmation
+	CommandName  string         // Name of the command (e.g., "apply", "destroy")
+	IsWaiting    bool           // True when waiting for user confirmation
+	ListenNext   tea.Cmd        // Next listener command to continue receiving output
 }
 
 type Model struct {
-	sidebar                  SidebarModel
-	mainPanel                MainPanelModel
-	titleBar                 TitleBarModel
-	statusBar                StatusBarModel
-	header                   HeaderModel
-	focusIndex               int
-	focusableCount           int
-	width                    int
-	height                   int
-	projects                 []terraform.Project
-	mode                     terraform.Mode
-	viewMode                 ViewMode
-	selectedProject          *terraform.Project
-	varFiles                 []terraform.VarFile
-	selectedVarFile          *terraform.VarFile
-	backendVarFiles          []terraform.BackendVarFile
-	selectedBackendFile      *terraform.BackendVarFile
-	backendState             terraform.BackendState
-	modal                    Modal              // Modal component
-	lastCommandMsg           tea.Msg            // Last terraform command message (for retry after AWS login)
-	pendingTerraformCommand  func() tea.Msg     // Command to run after AWS login completes (set by detectCommonErrors)
-	interactiveCmd           *InteractiveCommand // Tracks state for interactive commands (apply, destroy, etc.)
+	sidebar                 SidebarModel
+	mainPanel               MainPanelModel
+	titleBar                TitleBarModel
+	statusBar               StatusBarModel
+	header                  HeaderModel
+	focusIndex              int
+	focusableCount          int
+	width                   int
+	height                  int
+	projects                []terraform.Project
+	mode                    terraform.Mode
+	viewMode                ViewMode
+	selectedProject         *terraform.Project
+	varFiles                []terraform.VarFile
+	selectedVarFile         *terraform.VarFile
+	backendVarFiles         []terraform.BackendVarFile
+	selectedBackendFile     *terraform.BackendVarFile
+	backendState            terraform.BackendState
+	modal                   Modal               // Modal component
+	lastCommandMsg          tea.Msg             // Last terraform command message (for retry after AWS login)
+	pendingTerraformCommand func() tea.Msg      // Command to run after AWS login completes (set by detectCommonErrors)
+	interactiveCmd          *InteractiveCommand // Tracks state for interactive commands (apply, destroy, etc.)
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
@@ -395,24 +395,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focusIndex = (m.focusIndex + 1) % m.focusableCount
 			m.updateFocusStates()
 
-		case "backspace", "esc":
-			// Only go back if we're in ViewModeProjectDetail
-			if m.viewMode == ViewModeProjectDetail {
-				m.viewMode = ViewModeProjectList
-				m.selectedProject = nil
-				m.varFiles = nil
-				m.selectedVarFile = nil
-				sidebarItems := make([]string, len(m.projects))
-				for i, project := range m.projects {
-					sidebarItems[i] = project.Name
+		case "n", "backspace", "esc":
+			if m.focusIndex == 1 { // Main panel is focused
+				if m.interactiveCmd != nil && m.interactiveCmd.IsWaiting {
+					return m, func() tea.Msg {
+						return ApplyCancelledMsg{}
+					}
 				}
-				m.sidebar.Items = sidebarItems
-				m.sidebar.Title = "Projects"
-				m.sidebar.SelectedIndex = 0
-				m.statusBar.SetText(m.buildStatusText())
-				return m, nil
 			}
-		case "enter":
+
+			if m.focusIndex == 0 { // Sidebar is focused
+				// Only go back if we're in ViewModeProjectDetail
+				if m.viewMode == ViewModeProjectDetail {
+					m.viewMode = ViewModeProjectList
+					m.selectedProject = nil
+					m.varFiles = nil
+					m.selectedVarFile = nil
+					sidebarItems := make([]string, len(m.projects))
+					for i, project := range m.projects {
+						sidebarItems[i] = project.Name
+					}
+					m.sidebar.Items = sidebarItems
+					m.sidebar.Title = "Projects"
+					m.sidebar.SelectedIndex = 0
+					m.statusBar.SetText(m.buildStatusText())
+					return m, nil
+				}
+			}
+		case "y", "enter":
+			if m.focusIndex == 1 { // Main panel is focused
+				if m.interactiveCmd != nil && m.interactiveCmd.IsWaiting {
+					return m, func() tea.Msg {
+						return ApplyConfirmedMsg{}
+					}
+				}
+			}
 			// Handle enter based on focus and view mode
 			if m.focusIndex == 0 { // Sidebar is focused
 				if m.viewMode == ViewModeProjectList {
@@ -444,6 +461,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.focusIndex {
 		case 0:
 			m.sidebar, cmd = m.sidebar.Update(msg)
+		case 1:
+			m.mainPanel, cmd = m.mainPanel.Update(msg)
 		}
 		return m, cmd
 
@@ -600,6 +619,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Clear the inline confirmation prompt
+		m.mainPanel.ConfirmPrompt = ""
+
 		// User confirmed apply - send "yes" to terraform stdin
 		m.mainPanel.Title = "🚀 Applying changes..."
 
@@ -620,6 +642,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ApplyCancelledMsg:
 		// User cancelled apply - send "no" to terraform stdin to abort gracefully
 		if m.interactiveCmd != nil && m.interactiveCmd.StdinWriter != nil {
+			// Clear the inline confirmation prompt
+			m.mainPanel.ConfirmPrompt = ""
 			m.mainPanel.Title = "⛔ Apply cancelled"
 			m.mainPanel.Content += "\n[Cancelling apply...]\n"
 			m.mainPanel.SetContent(m.mainPanel.Content)
@@ -694,23 +718,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Switch to waiting state and show confirmation modal
 				m.interactiveCmd.IsWaiting = true
 
-				// Show confirmation modal
 				envName := ""
 				if m.selectedVarFile != nil {
 					envName = m.selectedVarFile.EnvName
 				}
 
-				m.modal.Show(ModalState{
-					Type:    ModalConfirm,
-					Title:   fmt.Sprintf("🚀 Apply changes to %s?", envName),
-					Message: "Confirm to proceed with apply, or cancel to abort.",
-					OnConfirm: func() tea.Msg {
-						return ApplyConfirmedMsg{}
-					},
-					OnCancel: func() tea.Msg {
-						return ApplyCancelledMsg{}
-					},
-				})
+				m.mainPanel.ConfirmPrompt = fmt.Sprintf("Apply changes to %s? [y]es / [n]o", envName)
+
+				// Show confirmation modal
+				// m.modal.Show(ModalState{
+				// 	Type:    ModalConfirm,
+				// 	Title:   fmt.Sprintf("🚀 Apply changes to %s?", envName),
+				// 	Message: "Confirm to proceed with apply, or cancel to abort.",
+				// 	OnConfirm: func() tea.Msg {
+				// 		return ApplyConfirmedMsg{}
+				// 	},
+				// 	OnCancel: func() tea.Msg {
+				// 		return ApplyCancelledMsg{}
+				// 	},
+				// })
 
 				return m, msg.ListenNext
 			}

@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/Nicolas-Rigaudy/lazytf/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -26,21 +29,29 @@ var (
 				Foreground(theme.Current.Mauve).
 				Bold(true).
 				PaddingBottom(1)
+
+	confirmPromptStyle = lipgloss.NewStyle().
+				Foreground(theme.Current.Base).
+				Background(theme.Current.Mauve).
+				Bold(true).
+				Padding(0, 1)
 )
 
 type MainPanelModel struct {
-	Title     string
-	Content   string
-	Width     int
-	Height    int
-	IsFocused bool
-	HasError  bool
-	viewport  viewport.Model
-	ready     bool
+	Title         string
+	Content       string
+	Width         int
+	Height        int
+	IsFocused     bool
+	HasError      bool
+	viewport      viewport.Model
+	ready         bool
+	ConfirmPrompt string
 }
 
 func NewMainPanel() MainPanelModel {
 	vp := viewport.New(0, 0)
+	vp.KeyMap = viewport.DefaultKeyMap()
 	vp.YPosition = 0
 	vp.Style = lipgloss.NewStyle().UnsetMaxWidth() // Allow full width rendering
 	return MainPanelModel{
@@ -96,6 +107,13 @@ func (m MainPanelModel) View() string {
 		viewContent = m.viewport.View()
 	}
 
+	// Add confirm prompt if set
+	if m.ConfirmPrompt != "" {
+		separator := strings.Repeat("─", m.viewport.Width)
+		prompt := confirmPromptStyle.Render(m.ConfirmPrompt)
+		viewContent = lipgloss.JoinVertical(lipgloss.Left, viewContent, separator, prompt)
+	}
+
 	// Apply border style
 	if m.HasError {
 		return mainPanelErrorStyle.Width(m.Width).Height(m.Height).Render(viewContent)
@@ -104,4 +122,10 @@ func (m MainPanelModel) View() string {
 	} else {
 		return mainPanelUnfocusedStyle.Width(m.Width).Height(m.Height).Render(viewContent)
 	}
+}
+
+func (m *MainPanelModel) Update(msg tea.Msg) (MainPanelModel, tea.Cmd) {
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return *m, cmd
 }
