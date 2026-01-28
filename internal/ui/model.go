@@ -234,6 +234,11 @@ func (m Model) buildStatusText() string {
 		parts = append(parts, "i: init", "p: plan", "a: apply", "shift+l: aws login", "│")
 	}
 
+	// Add view toggle hint if plan summary is available
+	if m.mainPanel.PlanSummary != nil {
+		parts = append(parts, "v: toggle view", "│")
+	}
+
 	parts = append(parts, "Tab: switch", "↑↓/jk: navigate", "Enter: select", "b: collapse sidebar", "q: quit")
 
 	return strings.Join(parts, " ")
@@ -778,6 +783,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.pendingTerraformCommand
 			m.pendingTerraformCommand = nil // Clear it
 			return m, cmd
+		}
+
+		if _, ok := m.lastCommandMsg.(RunPlanMsg); ok {
+
+			planJSON, err := terraform.RunShowPlanJSON(m.selectedProject.Path, terraform.PlanFilePath(m.selectedProject.Path))
+			if err != nil {
+				m.mainPanel.Title = "❌ Failed to parse plan"
+				m.mainPanel.HasError = true
+				return m, nil
+			}
+			planSummary, err := terraform.ParsePlanJSON(planJSON)
+			if err != nil {
+				m.mainPanel.Title = "❌ Failed to parse plan"
+				m.mainPanel.HasError = true
+				return m, nil
+			}
+			vm := NewPlanSummaryViewModel(planSummary)
+			vm.SetSize(m.mainPanel.viewport.Width, m.mainPanel.viewport.Height)
+			m.mainPanel.PlanSummary = vm
+			m.mainPanel.ViewMode = ViewModeSummary
+			m.mainPanel.Title = vm.Title()
+			m.mainPanel.HasError = false
+			m.statusBar.SetText(m.buildStatusText())
+
+			// Clear last command after processing
+			m.lastCommandMsg = nil
 		}
 
 		return m, nil
