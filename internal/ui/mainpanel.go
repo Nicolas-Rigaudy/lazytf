@@ -37,6 +37,11 @@ var (
 				Padding(0, 1)
 )
 
+const (
+	ViewModeRaw     = "raw"
+	ViewModeSummary = "planSummary"
+)
+
 type MainPanelModel struct {
 	Title         string
 	Content       string
@@ -47,6 +52,8 @@ type MainPanelModel struct {
 	viewport      viewport.Model
 	ready         bool
 	ConfirmPrompt string
+	ViewMode      string
+	PlanSummary   *PlanSummaryViewModel
 }
 
 func NewMainPanel() MainPanelModel {
@@ -82,6 +89,11 @@ func (m *MainPanelModel) SetSize(width, height int) {
 
 	m.viewport.Width = viewportWidth
 	m.viewport.Height = viewportHeight
+
+	if m.PlanSummary != nil {
+		m.PlanSummary.SetSize(viewportWidth, viewportHeight)
+	}
+
 	m.ready = true
 }
 
@@ -101,7 +113,14 @@ func (m MainPanelModel) View() string {
 
 	// Build content with title
 	var viewContent string
-	if m.Title != "" {
+	if m.ViewMode == ViewModeSummary && m.PlanSummary != nil {
+		if m.Title != "" {
+			titleLine := mainPanelTitleStyle.Render(m.Title)
+			viewContent = lipgloss.JoinVertical(lipgloss.Left, titleLine, "", m.PlanSummary.View())
+		} else {
+			viewContent = m.PlanSummary.View()
+		}
+	} else if m.Title != "" {
 		titleLine := mainPanelTitleStyle.Render(m.Title)
 		viewContent = lipgloss.JoinVertical(lipgloss.Left, titleLine, "", m.viewport.View())
 	} else {
@@ -127,6 +146,26 @@ func (m MainPanelModel) View() string {
 
 func (m *MainPanelModel) Update(msg tea.Msg) (MainPanelModel, tea.Cmd) {
 	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
+
+	// Handle view mode toggle
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "v":
+			if m.ViewMode == ViewModeSummary {
+				m.ViewMode = ViewModeRaw
+			} else if m.PlanSummary != nil {
+				m.ViewMode = ViewModeSummary
+			}
+			return *m, nil
+		}
+	}
+
+	//Delegate to appropriate view updater
+	if m.ViewMode == ViewModeSummary && m.PlanSummary != nil {
+		m.PlanSummary.Update(msg)
+	} else {
+		m.viewport, cmd = m.viewport.Update(msg)
+	}
 	return *m, cmd
 }
