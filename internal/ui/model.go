@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -141,6 +142,9 @@ func (m *Model) prepareCommandExecution() {
 	m.mainPanel.Title = "⏳ Running Command"
 	m.mainPanel.SetContent("")
 	m.mainPanel.HasError = false
+	m.mainPanel.ViewMode = ViewModeRaw
+	m.mainPanel.PlanSummary = nil
+	m.statusBar.SetText(m.buildStatusText())
 }
 
 // triggerAWSLogin initiates the AWS SSO login workflow
@@ -198,9 +202,11 @@ func (m *Model) detectCommonErrors() bool {
 		}
 
 		m.modal.Show(ModalState{
-			Type:    ModalConfirm,
-			Title:   "🔐 AWS Authentication Required",
-			Message: "AWS credentials are not available or have expired.\n\nWould you like to log in now?",
+			Type:         ModalConfirm,
+			Title:        "🔐 AWS Authentication Required",
+			Message:      "AWS credentials are not available or have expired.\n\nWould you like to log in now?",
+			ConfirmLabel: "Login",
+			CancelLabel:  "Cancel",
 			OnConfirm: func() tea.Msg {
 				return TriggerAWSLoginMsg{}
 			},
@@ -231,7 +237,7 @@ func (m Model) buildStatusText() string {
 		if m.mode == terraform.ModeMultiProject {
 			parts = append(parts, "Backspace: back", "│")
 		}
-		parts = append(parts, "i: init", "p: plan", "a: apply", "shift+l: aws login", "│")
+		parts = append(parts, "i: init", "p: plan", "a: apply", "d: destroy", "shift+l: aws login", "│")
 	}
 
 	// Add view toggle hint if plan summary is available
@@ -386,14 +392,72 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				// Run apply - will show plan and wait for confirmation
-				m.prepareCommandExecution()
-				return m, func() tea.Msg {
-					return RunApplyMsg{
-						ProjectPath: m.selectedProject.Path,
-						VarFile:     *m.selectedVarFile,
+				planFile := terraform.PlanFilePath(m.selectedProject.Path)
+				info, err := os.Stat(planFile)
+				if err == nil {
+					items := []string{"Use saved plan file (from " + terraform.PlanFileAge(info.ModTime()) + ")", "Use fresh plan"}
+					m.modal.Show(ModalState{
+						Type:  ModalSelect,
+						Title: "Apply Plan",
+						Items: items,
+						OnSelect: func(index int) tea.Msg {
+							if index == 0 {
+								// Use saved plan file
+								return RunApplyMsg{
+									ProjectPath: m.selectedProject.Path,
+									VarFile:     *m.selectedVarFile,
+									PlanFile:    planFile,
+								}
+							} else {
+								// Use fresh plan
+								return RunApplyMsg{
+									ProjectPath: m.selectedProject.Path,
+									VarFile:     *m.selectedVarFile,
+								}
+							}
+						},
+					})
+					return m, nil
+				} else {
+					// Run apply - will show plan and wait for confirmation
+					return m, func() tea.Msg {
+						return RunApplyMsg{
+							ProjectPath: m.selectedProject.Path,
+							VarFile:     *m.selectedVarFile,
+						}
 					}
 				}
+			}
+
+		case "d":
+			// Trigger Terraform Destroy
+			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil && m.selectedVarFile != nil {
+				// Check if the environment is initialized first
+				if !m.backendState.IsInitialized || m.backendState.DetectedEnv != m.selectedVarFile.EnvName {
+					m.modal.Show(ModalState{
+						Type:      ModalError,
+						Title:     "❌ Environment Not Initialized",
+						ErrorText: "Please run terraform init (press 'i') before running destroy.",
+					})
+					return m, nil
+				}
+
+				// Show confirmation modal before running - destroy is dangerous
+				envName := m.selectedVarFile.EnvName
+				m.modal.Show(ModalState{
+					Type:         ModalConfirm,
+					Title:        "⚠️  Confirm Terraform Destroy",
+					Message:      "This will DESTROY all resources in \"" + envName + "\".\n\nThis action cannot be undone!",
+					ConfirmLabel: "Destroy",
+					CancelLabel:  "Cancel",
+					OnConfirm: func() tea.Msg {
+						return RunDestroyMsg{
+							ProjectPath: m.selectedProject.Path,
+							VarFile:     *m.selectedVarFile,
+						}
+					},
+				})
+				return m, nil
 			}
 
 		case "tab":
@@ -528,11 +592,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If not initialized, show modal asking if they want to init
 		if !isThisEnvInitialized {
 			m.modal.Show(ModalState{
-				Type:  ModalConfirm,
-				Title: "⚠️  Environment Not Initialized",
-				Message: "Environment \"" + selectedVarFile.EnvName + "\" is not initialized.\n\n" +
-					"Terraform commands won't work until you initialize it.\n\n" +
-					"[Enter] Initialize now    [Esc] View details anyway",
+				Type:         ModalConfirm,
+				Title:        "⚠️  Environment Not Initialized",
+				Message:      "Environment \"" + selectedVarFile.EnvName + "\" is not initialized.\n\nTerraform commands won't work until you initialize it.",
+				ConfirmLabel: "Initialize",
+				CancelLabel:  "Skip",
 				OnConfirm: func() tea.Msg {
 					// Start init workflow
 					backends := terraform.MatchBackendsForEnv(selectedVarFile.EnvName, m.backendVarFiles)
@@ -563,9 +627,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case 1:
 			m.modal.Show(ModalState{
-				Type:    ModalConfirm,
-				Title:   "Confirm Terraform Init",
-				Message: "Initialize project " + m.selectedProject.Name + " with environment " + msg.EnvName + "?\n\nUsing backend: " + msg.Backends[0].Name,
+				Type:         ModalConfirm,
+				Title:        "Confirm Terraform Init",
+				Message:      "Initialize project " + m.selectedProject.Name + " with environment " + msg.EnvName + "?\n\nUsing backend: " + msg.Backends[0].Name,
+				ConfirmLabel: "Initialize",
+				CancelLabel:  "Cancel",
 				OnConfirm: func() tea.Msg {
 					return RunInitMsg{
 						ProjectPath: m.selectedProject.Path,
@@ -602,9 +668,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case InitBackendSelectedMsg:
 		m.modal.Show(ModalState{
-			Type:    ModalConfirm,
-			Title:   "Confirm Terraform Init",
-			Message: "Initialize project " + m.selectedProject.Name + " with environment " + msg.EnvName + "?\n\nUsing backend: " + msg.Backend.Name,
+			Type:         ModalConfirm,
+			Title:        "Confirm Terraform Init",
+			Message:      "Initialize project " + m.selectedProject.Name + " with environment " + msg.EnvName + "?\n\nUsing backend: " + msg.Backend.Name,
+			ConfirmLabel: "Initialize",
+			CancelLabel:  "Cancel",
 			OnConfirm: func() tea.Msg {
 				return RunInitMsg{
 					ProjectPath: m.selectedProject.Path,
@@ -699,13 +767,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prepareCommandExecution()
 
 		// Run terraform apply (without auto-approve) - returns stdin writer
-		result := terraform.RunApply(msg.ProjectPath, msg.VarFile)
+		result := terraform.RunApply(msg.ProjectPath, msg.VarFile, msg.PlanFile)
 
+		if msg.PlanFile != "" {
+			m.mainPanel.Title = "⏳ Applying saved plan..."
+		} else {
+			m.mainPanel.Title = "⏳ Applying with fresh plan..."
+			// Store the interactive command state
+			m.interactiveCmd = &InteractiveCommand{
+				StdinWriter:  result.StdinWriter,
+				OutputBuffer: "",
+				CommandName:  "apply",
+				IsWaiting:    false, // Will become true when we detect the confirmation prompt
+			}
+		}
+
+		return m, result.Cmd
+
+	case RunDestroyMsg:
+		// Store this command in case we need to retry after AWS login
+		m.lastCommandMsg = msg
+		m.prepareCommandExecution()
+
+		// Run terraform destroy (without auto-approve) - returns stdin writer
+		result := terraform.RunDestroy(msg.ProjectPath, msg.VarFile)
+
+		m.mainPanel.Title = "⏳ Destroying..."
 		// Store the interactive command state
 		m.interactiveCmd = &InteractiveCommand{
 			StdinWriter:  result.StdinWriter,
 			OutputBuffer: "",
-			CommandName:  "apply",
+			CommandName:  "destroy",
 			IsWaiting:    false, // Will become true when we detect the confirmation prompt
 		}
 
