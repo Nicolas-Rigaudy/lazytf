@@ -23,10 +23,12 @@ type ModalState struct {
 	Type ModalType
 
 	// For ModalConfirm
-	Title     string
-	Message   string
-	OnConfirm func() tea.Msg // Called when user presses 'y' or Enter
-	OnCancel  func() tea.Msg // Called when user presses 'n' or Esc
+	Title        string
+	Message      string
+	ConfirmLabel string
+	CancelLabel  string
+	OnConfirm    func() tea.Msg // Called when user presses 'y' or Enter
+	OnCancel     func() tea.Msg // Called when user presses 'n' or Esc
 
 	// For ModalSelect
 	Items    []string

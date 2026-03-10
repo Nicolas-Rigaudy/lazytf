@@ -42,6 +42,12 @@ type RunPlanMsg struct {
 type RunApplyMsg struct {
 	ProjectPath string
 	VarFile     terraform.VarFile
+	PlanFile    string
+}
+
+type RunDestroyMsg struct {
+	ProjectPath string
+	VarFile     terraform.VarFile
 }
 
 type TriggerAWSLoginMsg struct{}
@@ -49,4 +55,3 @@ type TriggerAWSLoginMsg struct{}
 type ApplyConfirmedMsg struct{}
 
 type ApplyCancelledMsg struct{}
-

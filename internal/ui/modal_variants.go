@@ -14,13 +14,21 @@ import (
 // ═══════════════════════════════════════════════════════════════════════════
 
 func RenderConfirmModal(state ModalState, termWidth, termHeight int) string {
+	confirmLabel := state.ConfirmLabel
+	if confirmLabel == "" {
+		confirmLabel = "Yes"
+	}
+	cancelLabel := state.CancelLabel
+	if cancelLabel == "" {
+		cancelLabel = "No"
+	}
 
 	builder := ModalBuilder{
 		Title:   state.Title,
 		Content: state.Message,
 		Buttons: []ModalButton{
-			{Label: "[y] Yes", Color: theme.Current.Green, Key: "y"},
-			{Label: "[n] No", Color: theme.Current.Red, Key: "n"},
+			{Label: "[Enter/y] " + confirmLabel, Color: theme.Current.Green, Key: "y"},
+			{Label: "[ESC/n] " + cancelLabel, Color: theme.Current.Red, Key: "n"},
 		},
 		Width:       60,
 		Height:      14,
