@@ -16,6 +16,7 @@ const (
 	ModalConfirm           // Generic confirmation modal (yes/no)
 	ModalSelect            // Generic selection modal (pick from list)
 	ModalError             // Error display modal
+	ModalHelp              // Help screen showing keybindings
 )
 
 // ModalState holds the current modal state (pure data)
@@ -37,6 +38,9 @@ type ModalState struct {
 
 	// For ModalError
 	ErrorText string
+
+	// For ModalHelp
+	KeyBindingGroups []KeyBindingGroup
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -126,6 +130,13 @@ func (m Modal) Update(msg tea.Msg) (Modal, tea.Cmd) {
 				return m, nil
 			}
 		}
+		if m.state.Type == ModalHelp {
+			switch msg.String() {
+			case "esc", "?": // '?' toggles the help modal closed
+				m.Close()
+				return m, nil
+			}
+		}
 	}
 	return m, nil
 }
@@ -139,6 +150,8 @@ func (m Modal) View(termWidth, termHeight int) string {
 		return RenderSelectModal(m.state, termWidth, termHeight)
 	case ModalError:
 		return RenderErrorModal(m.state, termWidth, termHeight)
+	case ModalHelp:
+		return RenderHelpModal(m.state, termWidth, termHeight)
 	default:
 		return ""
 	}
@@ -160,6 +173,7 @@ type ModalButton struct {
 type ModalBuilder struct {
 	Title       string         // Modal title (bold, colored)
 	Content     string         // Main content (can be multi-line)
+	Rows        [][]string     // For structured column/row layouts (optional)
 	Buttons     []ModalButton  // Action buttons at bottom
 	Width       int            // Modal width in characters
 	Height      int            // Modal height in lines
@@ -174,7 +188,7 @@ var modalButtonStyle = lipgloss.NewStyle().Padding(0, 1).Bold(true)
 func (mb ModalBuilder) Render(termWidth, termHeight int) string {
 	title := modalTitleStyle.Render(mb.Title)
 	separator := strings.Repeat("─", mb.Width-4)
-	content := strings.Join(strings.Split(mb.Content, "\n"), "\n")
+
 	var buttonStrs []string
 	for _, btn := range mb.Buttons {
 		btnStyle := modalButtonStyle.Foreground(btn.Color)
@@ -182,6 +196,38 @@ func (mb ModalBuilder) Render(termWidth, termHeight int) string {
 	}
 
 	buttons := strings.Join(buttonStrs, "  ")
+
+	var rowStrs []string
+	// If Rows are provided, render them as columns
+	if len(mb.Rows) > 0 {
+		columnMaxWidths := make([]int, len(mb.Rows[0]))
+		for _, row := range mb.Rows {
+			for i, cell := range row {
+				if w := lipgloss.Width(cell); w > columnMaxWidths[i] {
+					columnMaxWidths[i] = w
+				}
+			}
+		}
+
+		for _, row := range mb.Rows {
+			var cellStrs []string
+			for i, cell := range row {
+				// Fixed width per column (incl. the last) so every row renders
+				// to the same total width — JoinVertical(Center) then centers the
+				// whole block as a rectangle, keeping columns aligned.
+				width := columnMaxWidths[i] + 2 // Add padding
+				cellStrs = append(cellStrs, lipgloss.NewStyle().Width(width).Render(cell))
+			}
+			rowStrs = append(rowStrs, strings.Join(cellStrs, " "))
+		}
+	}
+	rows := strings.Join(rowStrs, "\n")
+	content := ""
+	if rows != "" {
+		content = rows
+	} else {
+		content = strings.Join(strings.Split(mb.Content, "\n"), "\n")
+	}
 
 	modal := lipgloss.JoinVertical(lipgloss.Center, title, separator, "", content, "", buttons)
 
