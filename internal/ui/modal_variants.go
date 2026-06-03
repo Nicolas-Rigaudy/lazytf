@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/Nicolas-Rigaudy/lazytf/internal/ui/theme"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -80,6 +81,45 @@ func RenderErrorModal(state ModalState, termWidth, termHeight int) string {
 		Width:       70,
 		Height:      12,
 		BorderColor: theme.Current.Red, // Red border for errors
+	}
+
+	return builder.Render(termWidth, termHeight)
+}
+
+func RenderHelpModal(state ModalState, termWidth, termHeight int) string {
+	var rows [][]string
+
+	for i, group := range state.KeyBindingGroups {
+		if i > 0 {
+			rows = append(rows, []string{"", ""}) // spacer between groups
+		}
+		rows = append(rows, []string{
+			lipgloss.NewStyle().Bold(true).Foreground(theme.Current.Mauve).Render(group.Title),
+			"",
+		})
+		for _, kb := range group.KeyBindings {
+			var keyStr, descStr string
+			if kb.Enabled {
+				keyStr = lipgloss.NewStyle().Foreground(theme.Current.Green).Render(kb.Key)
+				descStr = kb.Description
+			} else {
+				keyStr = lipgloss.NewStyle().Foreground(theme.Current.Overlay0).Render(kb.Key)
+				descStr = lipgloss.NewStyle().Foreground(theme.Current.Overlay0).Render(kb.Description)
+			}
+			rows = append(rows, []string{keyStr, descStr})
+		}
+	}
+
+	totalRows := len(rows)
+	builder := ModalBuilder{
+		Title: "📖 Help - Key Bindings",
+		Rows:  rows,
+		Buttons: []ModalButton{
+			{Label: "[ESC] Close", Color: theme.Current.Blue, Key: "esc"},
+		},
+		Width:       60,
+		Height:      totalRows + 10,
+		BorderColor: theme.Current.Blue,
 	}
 
 	return builder.Render(termWidth, termHeight)

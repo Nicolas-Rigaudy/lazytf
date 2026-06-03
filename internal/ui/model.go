@@ -304,31 +304,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.modal.IsActive() {
 				return m, tea.Quit
 			}
-		case "t": // TEST: Show test confirm modal (remove later)
+		case "?":
 			m.modal.Show(ModalState{
-				Type:    ModalConfirm,
-				Title:   "Test Confirmation Modal",
-				Message: "This is a test modal!\n\nBackend: variables/backend/local/backend_dev2.tfvars\nVar-file: variables/dev2.tfvars\n\nDoes it look good?",
-				OnConfirm: func() tea.Msg {
-					m.statusBar.SetText("✅ Modal confirmed!")
-					return nil
-				},
+				Type:             ModalHelp,
+				KeyBindingGroups: DefaultKeyBindings(),
 			})
 			return m, nil
-		case "s": // TEST: Show test select modal (remove later)
-			items := []string{"dev1", "dev2", "int", "prod"}
-			m.modal.Show(ModalState{
-				Type:     ModalSelect,
-				Title:    "Select Environment",
-				Items:    items,
-				Selected: 0,
-				OnSelect: func(selectedIndex int) tea.Msg {
-					m.statusBar.SetText("✅ Selected: " + items[selectedIndex])
-					return nil
-				},
-			})
-			return m, nil
-
 		case "i":
 			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil {
 				envNames := terraform.GetVarFileDisplayNames(m.varFiles)
