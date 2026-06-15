@@ -10,7 +10,9 @@ import (
 	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 )
 
-func RunPlan(projectPath string, varFile VarFile) tea.Cmd {
+// buildPlanArgs is the functional core: pure arg-building, no side effects.
+// Kept unexported (implementation detail) but reachable from same-package tests.
+func buildPlanArgs(projectPath string, varFile VarFile) []string {
 	args := []string{"plan"}
 
 	if varFile.FullPath != "" {
@@ -19,6 +21,12 @@ func RunPlan(projectPath string, varFile VarFile) tea.Cmd {
 
 	args = append(args, "-out="+PlanFilePath(projectPath))
 
+	return args
+}
+
+// RunPlan is the imperative shell: builds args, then executes.
+func RunPlan(projectPath string, varFile VarFile) tea.Cmd {
+	args := buildPlanArgs(projectPath, varFile)
 	result := executor.ExecuteStreaming("terraform", args, projectPath, false)
 	return result.Cmd
 }

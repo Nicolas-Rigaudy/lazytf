@@ -15,7 +15,8 @@ type InitOptions struct {
 	Input             bool
 }
 
-func RunInit(projectPath string, options InitOptions) tea.Cmd {
+// buildInitArgs is the functional core: pure arg-building, no side effects.
+func buildInitArgs(options InitOptions) []string {
 	args := []string{"init"}
 
 	if options.BackendConfigFile.Name != "" {
@@ -34,6 +35,12 @@ func RunInit(projectPath string, options InitOptions) tea.Cmd {
 		args = append(args, "-input=false")
 	}
 
+	return args
+}
+
+// RunInit is the imperative shell: builds args, then executes.
+func RunInit(projectPath string, options InitOptions) tea.Cmd {
+	args := buildInitArgs(options)
 	result := executor.ExecuteStreaming("terraform", args, projectPath, false)
 	return result.Cmd
 }
