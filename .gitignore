@@ -1,5 +1,5 @@
 # Binaries
-lazytf
+/lazytf
 *.so
 
 # Test binary, built with `go test -c`
