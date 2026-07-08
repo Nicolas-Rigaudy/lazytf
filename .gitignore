@@ -35,3 +35,6 @@ build/
 # Configuration overrides (keep example configs)
 config.yaml
 !config.example.yaml
+
+# Claude Code / agent workspace
+.claude/
