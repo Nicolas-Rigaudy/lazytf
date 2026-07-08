@@ -1,0 +1,7 @@
+# golangci-lint v2 configuration.
+# Uses the default linter set (errcheck, govet, ineffassign, staticcheck,
+# unused). Validated clean against the codebase locally.
+version: "2"
+
+linters:
+  default: standard

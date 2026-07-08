@@ -482,7 +482,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Handle enter based on focus and view mode
 			if m.focusIndex == 0 { // Sidebar is focused
-				if m.viewMode == ViewModeProjectList {
+				switch m.viewMode {
+				case ViewModeProjectList:
 					// Select project
 					if m.sidebar.SelectedIndex < len(m.projects) {
 						return m, func() tea.Msg {
@@ -492,7 +493,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 					}
-				} else if m.viewMode == ViewModeProjectDetail {
+				case ViewModeProjectDetail:
 					// Select var file
 					if m.sidebar.SelectedIndex < len(m.varFiles) {
 						return m, func() tea.Msg {
@@ -691,8 +692,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Write to stdin and close
 		writer := m.interactiveCmd.StdinWriter
-		writer.Write([]byte("yes\n"))
-		writer.Close()
+		// Best-effort: a write/close error here means terraform's pipe is already
+		// gone (it exited), which CommandCompleted/ErrorMsg will surface anyway.
+		_, _ = writer.Write([]byte("yes\n"))
+		_ = writer.Close()
 
 		// Clear interactiveCmd - we're done with the interactive flow
 		m.interactiveCmd = nil
@@ -715,8 +718,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Write to stdin in goroutine to avoid blocking
 			writer := m.interactiveCmd.StdinWriter
 			go func() {
-				writer.Write([]byte("no\n"))
-				writer.Close()
+				// Best-effort cancel; pipe errors mean terraform already exited.
+				_, _ = writer.Write([]byte("no\n"))
+				_ = writer.Close()
 			}()
 
 			// Clear interactiveCmd - we're done with the interactive flow
@@ -840,7 +844,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clean up interactive command state
 		if m.interactiveCmd != nil {
 			if m.interactiveCmd.StdinWriter != nil {
-				m.interactiveCmd.StdinWriter.Close()
+				_ = m.interactiveCmd.StdinWriter.Close()
 			}
 			m.interactiveCmd = nil
 		}
@@ -893,7 +897,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clean up interactive command state
 		if m.interactiveCmd != nil {
 			if m.interactiveCmd.StdinWriter != nil {
-				m.interactiveCmd.StdinWriter.Close()
+				_ = m.interactiveCmd.StdinWriter.Close()
 			}
 			m.interactiveCmd = nil
 		}
@@ -910,7 +914,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Calculate component heights
 		titleBarHeight := 1
 		statusBarHeight := 1
-		headerHeight := m.header.Height // Default 5, updates dynamically in View()
+		headerHeight := m.header.Height // Static 5: single line + border + padding
 
 		// JoinVertical adds newlines between components (title|header|content|status = 3 separators)
 		separatorLines := 3

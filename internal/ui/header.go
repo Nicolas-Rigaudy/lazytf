@@ -75,8 +75,10 @@ func (h HeaderModel) View(data InfoHeaderData) string {
 		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
 	}
 
-	// Render with border and padding
-	rendered := headerContainerStyle.Width(h.Width).Render(content)
-	h.Height = lipgloss.Height(rendered)
-	return rendered
+	// Render with border and padding.
+	// Height stays at the static NewHeader value (single content line + border +
+	// padding). When LastCommand is wired up and line2 can render, recompute the
+	// height where the data is available (e.g. in Update) rather than here — View
+	// has a value receiver, so any mutation to h would be discarded.
+	return headerContainerStyle.Width(h.Width).Render(content)
 }
