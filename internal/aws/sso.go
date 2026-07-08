@@ -31,7 +31,7 @@ func DiscoverSSOSessions() ([]*SSOSession, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open AWS config file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	var sessions []*SSOSession
