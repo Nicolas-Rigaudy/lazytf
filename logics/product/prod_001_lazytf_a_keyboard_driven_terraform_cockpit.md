@@ -6,6 +6,7 @@
 > Related task: (none yet)
 > Related architecture: (none yet)
 > Reminder: Update status, linked refs, scope, decisions, success signals, and open questions when you edit this doc.
+> Indicators reviewed: 2026-10-16 00:34:06
 
 # Overview
 LazyTF is a lazygit-style terminal UI for Terraform. It finds the Terraform projects and environments in a repo, and runs init, plan, apply and destroy with single keypresses. Output streams live, and a navigable plan summary groups changes by module. It wraps the real `terraform` binary and never touches state on its own, so anything it does can be repeated or checked on the plain CLI.
@@ -46,15 +47,20 @@ flowchart LR
 
 # Comparison with existing Terraform TUIs
 - `idoavrah/terraform-tui` (`tftui`, Python/Textual, pip and Homebrew): state-first. It browses the state tree, taints, untaints and deletes resources, and newer releases plan and apply. It does not navigate between environments or projects.
-- `lmarqs/terraform-ui` (`tfui`, Go/Bubble Tea, Homebrew/`go install`/mise, MIT, created May 2026): k9s-style plan, risk badges, blast radius and targeted apply for one project; supports terraform, tofu and terragrunt. It is the closest competitor and already ships the distribution LazyTF is aiming for.
+- `lmarqs/terraform-ui` (`tfui`, Go/Bubble Tea, Homebrew/`go install`/mise, MIT, created May 2026): k9s-style plan, risk badges, blast radius and targeted apply for one project; supports terraform, tofu and terragrunt. It is the closest competitor and already ships the distribution LazyTF is aiming for. Its plan review (risk badges, blast radius) is richer than LazyTF's and is the main source of inspiration for 0.4.
 - LazyTF's angle: lazygit-style navigation across many projects and environments, with env/backend pairing and a guard against plan/apply on the wrong environment. The other tools focus on a single project's state or plan.
 - Open question: are there other active tools (for example plain `terraform` wrappers such as `tfswitch`/`tenv` or Terragrunt's own TUI) that users would compare LazyTF with? Check before writing the README "Why" section.
 
 # Key product decisions
 - 2025-12: Go + Bubble Tea, single static binary, shells out to `terraform`.
 - 2026-07: Linux release via GoReleaser and CI with golangci-lint; v0.1.0 tagged.
-- 2026-10-16 (proposed, owner to confirm): the 1.0 bar is "works on a stranger's repo and installs from a package manager", not feature parity with existing TUIs.
-- 2026-10-16 (proposed, owner to confirm): MIT licence, matching the README's current claim.
+- 2026-10-16: the 1.0 bar is "works on a stranger's repo and installs from a package manager", not feature parity with existing TUIs.
+- 2026-10-16: MIT licence, matching the README's current claim.
+- 2026-10-16: OpenTofu is needed: configurable binary in 0.3, verified end-to-end support in 1.1.
+- 2026-10-16: environment binding follows Terraform itself. The backend of the last `init` is read from `.terraform/terraform.tfstate` (Terraform's own record), not guessed from the state key and not duplicated in a LazyTF state file. A per-repo `.lazytf.yml` is optional and only overrides layout (var-file and backend-config globs, binary, auth step).
+- 2026-10-16: packaging is fully automated by GoReleaser on tag push (GitHub release, AUR `lazytf-bin`, Homebrew tap), so a release stays one tag. macOS ships unsigned in 1.0 with the Gatekeeper workaround documented; signing and notarisation are revisited once there are users asking.
+- 2026-10-16: Windows stays out of 1.0.
+- 2026-10-16: `tfui` is a source of feature ideas, not a parity target. LazyTF competes on lazygit-style multi-project and multi-environment navigation, and adopts the best of its plan review (risk badges, blast radius, destructive-change emphasis) as a safety feature before apply.
 
 # Success signals
 - Three sample repos (local backend; GCS with plain tfvars; S3 with the owner's layout) plan and apply from LazyTF with config only.
