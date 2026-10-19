@@ -8,6 +8,7 @@
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
+> Indicators reviewed: 2026-10-19 15:57:23
 
 # AI Context
 - Summary: Ship 1.0 through one tag push: LICENSE, GoReleaser builds for linux/darwin amd64/arm64 on GitHub releases, AUR lazytf-bin, a Homebrew tap, go install, and CI gating build, test and lint.
@@ -21,6 +22,7 @@
 
 # Scope
 - In:
+  - Remove the v0.1 legacy plan-file cleanup (`internal/terraform/legacyplans.go` and its startup call) before tagging 1.0 (decided 2026-10-19).
   - LICENSE (MIT proposed; owner confirms) and a matching README section.
   - GoReleaser: `goos` linux and darwin, `goarch` amd64 and arm64, `-ldflags -X main.version`, checksums, changelog grouped by commit prefix.
   - `aurs:` block publishing `lazytf-bin` (needs an AUR SSH key as a repo secret).
