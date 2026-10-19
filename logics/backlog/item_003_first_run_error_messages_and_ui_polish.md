@@ -25,8 +25,9 @@
   - Empty and error states: no projects, no environments, `terraform` not found, init failed.
   - One source of truth for keybinds shared by help modal, status bar and README.
   - Checks on 80x24 terminals and light terminal themes; discovery time on a large home dir.
+  - Follow the terminal theme: replace the hardcoded Catppuccin hex colours with the terminal's 16 ANSI colour slots, and paint no backgrounds, so LazyTF matches whatever theme the terminal uses and follows theme switches.
 - Out:
-  - Theme switching beyond light/dark readability.
+  - A LazyTF-specific theme system or theme picker (colours come from the terminal).
   - Mouse support.
 
 # Acceptance criteria
@@ -34,6 +35,7 @@
 - AC2: Running in an uninitialised project directory opens that project, not a home-wide scan.
 - AC3: Without `terraform` on PATH the user sees one clear message saying what to install.
 - AC4: A first-time tester plans a sample repo in under five minutes using only the README.
+- AC5: No hex or 256-colour values remain in the UI styles. After switching the terminal theme (e.g. Catppuccin Macchiato to a light theme), LazyTF's colours change with it and stay readable.
 
 # AC Traceability
 - request-AC1 -> This backlog slice. Proof: contributes to a stranger installing LazyTF and planning their own repo.
