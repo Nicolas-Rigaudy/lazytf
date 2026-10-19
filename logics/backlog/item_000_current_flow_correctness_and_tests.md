@@ -1,14 +1,14 @@
 ## item_000_current_flow_correctness_and_tests - Current flow correctness and tests
 > From version: 0.1.0
 > Schema version: 1.0
-> Status: In progress
+> Status: Done
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 20%
+> Progress: 100%
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
-> Indicators reviewed: 2026-10-19 14:45:51
+> Indicators reviewed: 2026-10-19 15:07:08
 
 # AI Context
 - Summary: Fix the correctness bugs in the existing init/plan/apply/destroy flow and add tests for every non-UI package before generalising anything.
@@ -53,7 +53,7 @@
 - Product brief(s): `prod_001_lazytf_a_keyboard_driven_terraform_cockpit`
 - Architecture decision(s): (none yet)
 - Request: `req_000_lazytf_1_0_public_release`
-- Primary task(s): (none yet)
+- Primary task(s): `task_001_current_flow_correctness_and_tests`
 
 # Priority
 - Priority: High
@@ -61,6 +61,7 @@
 
 # Notes
 - Roadmap milestone: 0.2 - Current flow correctness and tests (`road_001_lazytf_to_1_0`).
+- Task `task_001_current_flow_correctness_and_tests` was finished via `logics-manager flow finish task` on 2026-10-19.
 
 # Tasks
 - `task_001_current_flow_correctness_and_tests`
