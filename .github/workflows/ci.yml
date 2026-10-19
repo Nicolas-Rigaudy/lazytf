@@ -36,6 +36,34 @@ jobs:
       - name: Test
         run: go test ./...
 
+  integration:
+    name: integration (terraform init/plan/apply)
+    runs-on: ubuntu-latest
+    env:
+      TERRAFORM_VERSION: 1.15.9
+      TERRAFORM_SHA256: 76edd0b22d2f27d3d2e097cd793209646f719cf60f02ff3af626b07361137da1
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install pinned Terraform
+        run: |
+          zip="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          curl -fsSLo "$RUNNER_TEMP/$zip" "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/$zip"
+          echo "$TERRAFORM_SHA256  $RUNNER_TEMP/$zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          unzip -q "$RUNNER_TEMP/$zip" -d "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Integration test
+        run: |
+          terraform version
+          go test -tags integration -run Integration -v ./internal/terraform
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest

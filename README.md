@@ -174,6 +174,15 @@ lazytf/
 │   └── ui/             # Bubble Tea components: model, sidebar, panels, modals
 ```
 
+### Running the tests
+
+```bash
+go test ./...                                                       # unit tests
+go test -tags integration -run Integration -v ./internal/terraform  # real init/plan/apply, needs terraform on PATH
+```
+
+The integration test copies `internal/terraform/testdata/fixture` (local backend, `null` provider) to a temp dir, so it never touches your state.
+
 ---
 
 ## Tech Stack

@@ -5,3 +5,8 @@ version: "2"
 
 linters:
   default: standard
+
+run:
+  # Also lint the integration test (go test -tags integration).
+  build-tags:
+    - integration
