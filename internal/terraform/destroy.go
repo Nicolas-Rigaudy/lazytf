@@ -8,7 +8,8 @@ import (
 
 // buildDestroyArgs is the functional core: pure arg-building, no side effects.
 func buildDestroyArgs(varFile VarFile) []string {
-	args := []string{"destroy"}
+	// -input=false: see buildApplyArgs; the approval prompt still runs.
+	args := []string{"destroy", "-input=false"}
 
 	if varFile.FullPath != "" {
 		args = append(args, fmt.Sprintf("-var-file=%s", varFile.FullPath))

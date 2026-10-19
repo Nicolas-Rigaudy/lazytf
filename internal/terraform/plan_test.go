@@ -20,13 +20,13 @@ func TestBuildPlanArgs(t *testing.T) {
 			name:     "with var file",
 			varFile:  VarFile{FullPath: "/home/user/infra/dev.tfvars"},
 			planFile: "/cache/infra-dev.tfplan",
-			want:     []string{"plan", "-var-file=/home/user/infra/dev.tfvars", "-out=/cache/infra-dev.tfplan"},
+			want:     []string{"plan", "-input=false", "-var-file=/home/user/infra/dev.tfvars", "-out=/cache/infra-dev.tfplan"},
 		},
 		{
 			name:     "without var file",
 			varFile:  VarFile{}, // empty FullPath -> no -var-file flag
 			planFile: "/cache/infra-default.tfplan",
-			want:     []string{"plan", "-out=/cache/infra-default.tfplan"},
+			want:     []string{"plan", "-input=false", "-out=/cache/infra-default.tfplan"},
 		},
 	}
 

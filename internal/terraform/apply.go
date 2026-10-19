@@ -19,7 +19,9 @@ type InteractiveResult struct {
 // Returns the args plus withStdin, since the plan-file branch also decides
 // whether interactive confirmation (stdin) is needed.
 func buildApplyArgs(varFile VarFile, planFile string) ([]string, bool) {
-	args := []string{"apply"}
+	// -input=false turns off variable prompts only; Terraform still asks for
+	// approval, so the "yes" sent on stdin can never fill a missing variable.
+	args := []string{"apply", "-input=false"}
 	var withStdin bool
 
 	if planFile != "" {

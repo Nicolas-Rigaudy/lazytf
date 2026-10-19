@@ -18,7 +18,7 @@ func TestBuildApplyArgs(t *testing.T) {
 			name:      "plan file disables stdin",
 			varFile:   VarFile{FullPath: "/home/user/infra/dev.tfvars"}, // ignored when planFile set
 			planFile:  "/tmp/lazytf-infra.tfplan",
-			wantArgs:  []string{"apply", "/tmp/lazytf-infra.tfplan"},
+			wantArgs:  []string{"apply", "-input=false", "/tmp/lazytf-infra.tfplan"},
 			wantStdin: false,
 		},
 		{
@@ -26,7 +26,7 @@ func TestBuildApplyArgs(t *testing.T) {
 			name:      "var file enables stdin",
 			varFile:   VarFile{FullPath: "/home/user/infra/dev.tfvars"},
 			planFile:  "",
-			wantArgs:  []string{"apply", "-var-file=/home/user/infra/dev.tfvars"},
+			wantArgs:  []string{"apply", "-input=false", "-var-file=/home/user/infra/dev.tfvars"},
 			wantStdin: true,
 		},
 		{
@@ -34,7 +34,7 @@ func TestBuildApplyArgs(t *testing.T) {
 			name:      "no plan or var file still enables stdin",
 			varFile:   VarFile{},
 			planFile:  "",
-			wantArgs:  []string{"apply"},
+			wantArgs:  []string{"apply", "-input=false"},
 			wantStdin: true,
 		},
 	}

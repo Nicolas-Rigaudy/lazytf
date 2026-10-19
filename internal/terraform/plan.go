@@ -15,7 +15,9 @@ import (
 // buildPlanArgs is the functional core: pure arg-building, no side effects.
 // Kept unexported (implementation detail) but reachable from same-package tests.
 func buildPlanArgs(varFile VarFile, planFile string) []string {
-	args := []string{"plan"}
+	// -input=false: a missing variable fails at once instead of waiting on
+	// a stdin that is not wired.
+	args := []string{"plan", "-input=false"}
 
 	if varFile.FullPath != "" {
 		args = append(args, fmt.Sprintf("-var-file=%s", varFile.FullPath))
