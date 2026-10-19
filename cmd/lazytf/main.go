@@ -46,6 +46,7 @@ func main() {
 
 	// Initialize UI model
 	m := ui.NewModel(projects, mode)
+	m.SetNotice(terraform.CleanupLegacyPlans())
 
 	p := tea.NewProgram(m)
 

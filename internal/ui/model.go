@@ -55,6 +55,7 @@ type Model struct {
 	pendingTerraformCommand func() tea.Msg      // Command to run after AWS login completes (set by detectCommonErrors)
 	interactiveCmd          *InteractiveCommand // Tracks state for interactive commands (apply, destroy, etc.)
 	lastFailure             string              // Status bar note for the last failed command, cleared on the next run
+	notice                  string              // One-off status bar note (e.g. startup cleanup), cleared on the next run
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
@@ -146,6 +147,13 @@ func (m *Model) prepareCommandExecution() {
 	m.mainPanel.ViewMode = ViewModeRaw
 	m.mainPanel.PlanSummary = nil
 	m.lastFailure = ""
+	m.notice = ""
+	m.statusBar.SetText(m.buildStatusText())
+}
+
+// SetNotice shows a one-off note in the status bar until the next command runs.
+func (m *Model) SetNotice(text string) {
+	m.notice = text
 	m.statusBar.SetText(m.buildStatusText())
 }
 
@@ -236,6 +244,9 @@ func (m Model) buildStatusText() string {
 
 	if m.lastFailure != "" {
 		parts = append(parts, m.lastFailure, "│")
+	}
+	if m.notice != "" {
+		parts = append(parts, m.notice, "│")
 	}
 
 	// Add help keys based on view mode

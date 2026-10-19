@@ -56,3 +56,22 @@ func TestStatusTextShowsAndClearsFailure(t *testing.T) {
 		t.Errorf("after starting a new command, status = %q, want the failure cleared", m.statusBar.Text)
 	}
 }
+
+func TestStatusTextShowsAndClearsNotice(t *testing.T) {
+	var m Model
+	m.SetNotice("")
+	if strings.Contains(m.statusBar.Text, "Removed") {
+		t.Errorf("empty notice shown: %q", m.statusBar.Text)
+	}
+
+	note := "Removed 2 old plan files from /tmp (v0.1 location)"
+	m.SetNotice(note)
+	if !strings.HasPrefix(m.statusBar.Text, note) {
+		t.Errorf("status = %q, want it to start with the notice", m.statusBar.Text)
+	}
+
+	m.prepareCommandExecution()
+	if m.notice != "" || strings.Contains(m.statusBar.Text, note) {
+		t.Errorf("after starting a new command, status = %q, want the notice cleared", m.statusBar.Text)
+	}
+}
