@@ -125,7 +125,7 @@ ignore_patterns:
   - "*/.terraform"
 ```
 
-The file is optional — sensible defaults apply if it's absent.
+The file is optional — sensible defaults apply if it's absent. Any key you leave out keeps its default, so a file with only `search_paths` still uses the ignore patterns above.
 
 ### Key Bindings
 

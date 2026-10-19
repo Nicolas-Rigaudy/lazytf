@@ -28,21 +28,22 @@ func Load() (Config, error) {
 	if err != nil {
 		return DefaultConfig(), err
 	}
-	_, err = os.Stat(configPath)
+	return loadFrom(configPath)
+}
 
+// loadFrom reads the config at path over the defaults: keys the file does not
+// set keep their default value, so a file with only search_paths still gets
+// the default ignore patterns.
+func loadFrom(configPath string) (Config, error) {
+	data, err := os.ReadFile(configPath)
 	if os.IsNotExist(err) {
 		return DefaultConfig(), nil
 	}
 	if err != nil {
 		return DefaultConfig(), err
 	}
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return DefaultConfig(), err
-	}
-	var cfg Config
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
+	cfg := DefaultConfig()
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return DefaultConfig(), err
 	}
 	return cfg, nil
