@@ -3,7 +3,6 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/ui/theme"
@@ -103,18 +102,7 @@ func (vm *PlanSummaryViewModel) updateContent() {
 				}
 
 				// Determine action prefix and style
-				prefix := "~"
-				style := changeStyle
-				if len(rc.Change.Actions) > 0 {
-					switch rc.Change.Actions[0] {
-					case "create":
-						prefix = "+"
-						style = addStyle
-					case "delete":
-						prefix = "-"
-						style = deleteStyle
-					}
-				}
+				prefix, style := actionPrefix(rc.Change.Actions)
 
 				// Show short name (strip module prefix for non-root modules)
 				shortName := rc.Address
@@ -190,49 +178,68 @@ func (vm *PlanSummaryViewModel) ensureSelectedVisible() {
 	}
 }
 
-func extractModuleName(address string) string {
-	parts := strings.Split(address, ".")
-	if len(parts) <= 2 {
-		return "(root)"
+// actionPrefix is Terraform's own change symbol: a replace shows as -/+
+// (destroy first) or +/- (create_before_destroy).
+func actionPrefix(actions []string) (string, lipgloss.Style) {
+	if len(actions) == 2 && actions[0] == "delete" && actions[1] == "create" {
+		return "-/+", deleteStyle
 	}
-	return strings.Join(parts[:len(parts)-2], ".")
+	if len(actions) == 2 && actions[0] == "create" && actions[1] == "delete" {
+		return "+/-", addStyle
+	}
+	if len(actions) > 0 {
+		switch actions[0] {
+		case "create":
+			return "+", addStyle
+		case "delete":
+			return "-", deleteStyle
+		case "read":
+			return "<=", changeStyle
+		}
+	}
+	return "~", changeStyle
 }
 
+// moduleName groups by Terraform's own module_address: splitting the resource
+// address on "." breaks on data sources and on keys containing dots.
+func moduleName(rc terraform.ResourceChange) string {
+	if rc.ModuleAddress == "" {
+		return "(root)"
+	}
+	return rc.ModuleAddress
+}
+
+// buildModuleGroups groups changes by module, in the order Terraform lists
+// them, and counts them the way Terraform's "Plan:" line does: a replace
+// counts as one add and one destroy, whichever order it runs in.
 func buildModuleGroups(planSummary *terraform.PlanSummary) []ModuleGroup {
-	moduleMap := make(map[string]*ModuleGroup)
+	var moduleGroups []ModuleGroup
+	index := make(map[string]int)
 
 	for _, resourceChange := range planSummary.ResourceChanges {
-		if len(resourceChange.Change.Actions) == 0 {
+		actions := resourceChange.Change.Actions
+		if len(actions) == 0 || actions[0] == "no-op" {
 			continue
 		}
-		// Skip no-op resources
-		if resourceChange.Change.Actions[0] == "no-op" {
-			continue
-		}
-		moduleName := extractModuleName(resourceChange.Address)
-		group, exists := moduleMap[moduleName]
+		name := moduleName(resourceChange)
+		i, exists := index[name]
 		if !exists {
-			group = &ModuleGroup{Name: moduleName}
-			moduleMap[moduleName] = group
+			i = len(moduleGroups)
+			index[name] = i
+			moduleGroups = append(moduleGroups, ModuleGroup{Name: name})
 		}
+		group := &moduleGroups[i]
 		group.Resources = append(group.Resources, resourceChange)
-		switch resourceChange.Change.Actions[0] {
-		case "create":
-			group.AddCount++
-		case "delete":
-			group.DeleteCount++
-			// Check for replace (delete then create)
-			if len(resourceChange.Change.Actions) > 1 && resourceChange.Change.Actions[1] == "create" {
+		for _, action := range actions {
+			switch action {
+			case "create":
 				group.AddCount++
+			case "delete":
+				group.DeleteCount++
+			case "update":
+				group.ChangeCount++
 			}
-		case "update":
-			group.ChangeCount++
 		}
-	}
-
-	var moduleGroups []ModuleGroup
-	for _, group := range moduleMap {
-		moduleGroups = append(moduleGroups, *group)
 	}
 
 	return moduleGroups

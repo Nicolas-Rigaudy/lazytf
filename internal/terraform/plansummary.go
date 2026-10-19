@@ -10,8 +10,9 @@ type PlanSummary struct {
 }
 
 type ResourceChange struct {
-	Address string `json:"address"`
-	Change  Change `json:"change"`
+	Address       string `json:"address"`
+	ModuleAddress string `json:"module_address"` // empty for root module resources
+	Change        Change `json:"change"`
 }
 
 type Change struct {
