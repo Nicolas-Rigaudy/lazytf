@@ -83,9 +83,17 @@ func ExpandPath(path string) (string, error) {
 }
 
 // shouldIgnore checks if a path matches any of the ignore patterns.
+// A pattern is matched against as many trailing path segments as it has, so
+// "*/.git" matches any .git directory and ".git" matches it too.
 func shouldIgnore(path string, ignorePatterns []string) bool {
+	segments := strings.Split(filepath.ToSlash(filepath.Clean(path)), "/")
 	for _, pattern := range ignorePatterns {
-		matched, err := filepath.Match(pattern, filepath.Base(path))
+		n := strings.Count(pattern, "/") + 1
+		if n > len(segments) {
+			continue
+		}
+		tail := strings.Join(segments[len(segments)-n:], "/")
+		matched, err := filepath.Match(pattern, tail)
 		if err == nil && matched {
 			return true
 		}
