@@ -4,7 +4,7 @@
 > Related product: `prod_001_lazytf_a_keyboard_driven_terraform_cockpit`
 > Related request: `req_000_lazytf_1_0_public_release`
 > Reminder: Update status, milestone scope, linked refs, risks, and success signals when you edit this doc.
-> Indicators reviewed: 2026-10-16 00:34:06
+> Indicators reviewed: 2026-10-19 15:31:18
 
 # AI Context
 - Summary: Roadmap for LazyTF from the working 0.1.0 AWS-SSO + tfvars flow to a public 1.0 that strangers install from GitHub releases, AUR, Homebrew or `go install`, then post-1.0 depth.

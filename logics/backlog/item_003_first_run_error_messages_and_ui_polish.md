@@ -8,6 +8,7 @@
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
+> Indicators reviewed: 2026-10-19 15:31:18
 
 # AI Context
 - Summary: Make the first five minutes work for a new user: CLI flags, empty states, clear errors and consistent keybinds.
