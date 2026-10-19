@@ -54,6 +54,7 @@ type Model struct {
 	lastCommandMsg          tea.Msg             // Last terraform command message (for retry after AWS login)
 	pendingTerraformCommand func() tea.Msg      // Command to run after AWS login completes (set by detectCommonErrors)
 	interactiveCmd          *InteractiveCommand // Tracks state for interactive commands (apply, destroy, etc.)
+	lastFailure             string              // Status bar note for the last failed command, cleared on the next run
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
@@ -144,6 +145,7 @@ func (m *Model) prepareCommandExecution() {
 	m.mainPanel.HasError = false
 	m.mainPanel.ViewMode = ViewModeRaw
 	m.mainPanel.PlanSummary = nil
+	m.lastFailure = ""
 	m.statusBar.SetText(m.buildStatusText())
 }
 
@@ -231,6 +233,10 @@ func (m *Model) detectCommonErrors() bool {
 // buildStatusText creates dynamic status bar text based on current state
 func (m Model) buildStatusText() string {
 	var parts []string
+
+	if m.lastFailure != "" {
+		parts = append(parts, m.lastFailure, "│")
+	}
 
 	// Add help keys based on view mode
 	if m.viewMode == ViewModeProjectDetail {
@@ -892,8 +898,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case executor.CommandErrorMsg:
-		m.mainPanel.Title = fmt.Sprintf("❌ Command Failed (exit code %d)", msg.ExitCode)
+		m.mainPanel.Title = "❌ Command Failed (" + failureReason(msg) + ")"
 		m.mainPanel.HasError = true
+		m.lastFailure = commandFailureText(msg)
+		m.statusBar.SetText(m.buildStatusText())
 
 		// Clean up interactive command state
 		if m.interactiveCmd != nil {
@@ -950,4 +958,26 @@ func savedPlanLabel(projectPath string, planModTime time.Time) string {
 		label += " ⚠ older than last init"
 	}
 	return label
+}
+
+// failureReason is the exit code when the command ran, or the error when it
+// could not start (e.g. terraform not on PATH), where the exit code means nothing.
+func failureReason(msg executor.CommandErrorMsg) string {
+	if msg.ExitCode > 0 {
+		return fmt.Sprintf("exit code %d", msg.ExitCode)
+	}
+	if msg.Error != nil {
+		return msg.Error.Error()
+	}
+	return msg.Output
+}
+
+// commandFailureText is the status bar note for a failed command: the
+// subcommand only (the full line carries long var-file paths) and the reason.
+func commandFailureText(msg executor.CommandErrorMsg) string {
+	fields := strings.Fields(msg.Command)
+	if len(fields) > 2 {
+		fields = fields[:2]
+	}
+	return "✗ " + strings.Join(fields, " ") + " failed: " + failureReason(msg)
 }
