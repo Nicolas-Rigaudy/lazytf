@@ -373,10 +373,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				planFile := terraform.PlanFilePath(m.selectedProject.Path)
+				// The plan path is keyed by env, so another env's plan is never offered.
+				planFile := terraform.PlanFilePath(m.selectedProject.Path, m.selectedVarFile.EnvName)
 				info, err := os.Stat(planFile)
 				if err == nil {
-					items := []string{"Use saved plan file (from " + terraform.PlanFileAge(info.ModTime()) + ")", "Use fresh plan"}
+					items := []string{savedPlanLabel(m.selectedProject.Path, info.ModTime()), "Use fresh plan"}
 					m.modal.Show(ModalState{
 						Type:  ModalSelect,
 						Title: "Apply Plan",
@@ -862,9 +863,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		if _, ok := m.lastCommandMsg.(RunPlanMsg); ok {
-
-			planJSON, err := terraform.RunShowPlanJSON(m.selectedProject.Path, terraform.PlanFilePath(m.selectedProject.Path))
+		if planMsg, ok := m.lastCommandMsg.(RunPlanMsg); ok {
+			planFile := terraform.PlanFilePath(planMsg.ProjectPath, planMsg.VarFile.EnvName)
+			planJSON, err := terraform.RunShowPlanJSON(planMsg.ProjectPath, planFile)
 			if err != nil {
 				m.mainPanel.Title = "❌ Failed to parse plan"
 				m.mainPanel.HasError = true
@@ -939,4 +940,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mainPanel.SetSize(mainPanelWidth, panelHeight)
 	}
 	return m, nil
+}
+
+// savedPlanLabel describes the saved plan in the apply menu, flagging a plan
+// that predates the last init (it may target a different backend).
+func savedPlanLabel(projectPath string, planModTime time.Time) string {
+	label := "Use saved plan file (from " + terraform.PlanFileAge(planModTime) + ")"
+	if terraform.PlanOlderThanInit(projectPath, planModTime) {
+		label += " ⚠ older than last init"
+	}
+	return label
 }

@@ -1,13 +1,14 @@
 ## item_000_current_flow_correctness_and_tests - Current flow correctness and tests
 > From version: 0.1.0
 > Schema version: 1.0
-> Status: Ready
+> Status: In progress
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 0%
+> Progress: 20%
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
+> Indicators reviewed: 2026-10-19 14:45:51
 
 # AI Context
 - Summary: Fix the correctness bugs in the existing init/plan/apply/destroy flow and add tests for every non-UI package before generalising anything.
@@ -60,3 +61,6 @@
 
 # Notes
 - Roadmap milestone: 0.2 - Current flow correctness and tests (`road_001_lazytf_to_1_0`).
+
+# Tasks
+- `task_001_current_flow_correctness_and_tests`
