@@ -8,7 +8,7 @@
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
-> Indicators reviewed: 2026-10-19 15:07:08
+> Indicators reviewed: 2026-10-19 15:54:45
 
 # AI Context
 - Summary: Fix the correctness bugs in the existing init/plan/apply/destroy flow and add tests for every non-UI package before generalising anything.
@@ -62,6 +62,7 @@
 # Notes
 - Roadmap milestone: 0.2 - Current flow correctness and tests (`road_001_lazytf_to_1_0`).
 - Task `task_001_current_flow_correctness_and_tests` was finished via `logics-manager flow finish task` on 2026-10-19.
+- Follow-up (owner decision, 2026-10-19): on startup LazyTF deletes its own v0.1 plan files left in the temp dir. Only `lazytf-*.tfplan` directly in `os.TempDir()` (no recursion), regular files (not symlinks) owned by the current user; best effort, errors never block startup. When at least one file is removed, the status bar shows one line such as "Removed 2 old plan files from /tmp (v0.1 location)", cleared on the next command. Code: `internal/terraform/legacyplans.go`.
 
 # Tasks
 - `task_001_current_flow_correctness_and_tests`
