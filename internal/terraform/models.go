@@ -34,6 +34,7 @@ type BackendState struct {
 	BackendConfig   map[string]string // key-value pairs from backend config
 	DetectedEnv     string            // environment name inferred from backend config (e.g., "dev2")
 	MatchedBackends []BackendVarFile  // the backend var files that matches current state
+	AnyEnv          bool              // true if no backend config files exist, so one init serves every env
 }
 
 // Mode represents how LazyTF is operating.
@@ -43,3 +44,16 @@ const (
 	ModeSingleProject Mode = iota
 	ModeMultiProject
 )
+
+// NoVarFileEnv is the name of the stand-in environment of a project with no
+// var files, so it can still be planned and applied.
+const NoVarFileEnv = "(no var-file)"
+
+// WithDefaultEnv returns varFiles, or one stand-in environment without a
+// var file when there are none.
+func WithDefaultEnv(varFiles []VarFile) []VarFile {
+	if len(varFiles) > 0 {
+		return varFiles
+	}
+	return []VarFile{{Name: NoVarFileEnv, EnvName: NoVarFileEnv}}
+}

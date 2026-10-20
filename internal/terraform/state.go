@@ -17,6 +17,10 @@ import (
 // DetectCurrentBackend checks if Terraform is initialized and detects the current backend configuration.
 // It reads .terraform/terraform.tfstate to determine which backend is currently active.
 func DetectCurrentBackend(projectPath string, backendVarFiles []BackendVarFile) BackendState {
+	return detectCurrentBackend(bindingCacheDir(), projectPath, backendVarFiles)
+}
+
+func detectCurrentBackend(cacheDir, projectPath string, backendVarFiles []BackendVarFile) BackendState {
 	state := BackendState{
 		IsInitialized: false,
 		BackendConfig: make(map[string]string),
@@ -31,6 +35,17 @@ func DetectCurrentBackend(projectPath string, backendVarFiles []BackendVarFile) 
 
 	// Directory exists - project is initialized
 	state.IsInitialized = true
+
+	// With no backend config files the backend cannot differ per environment,
+	// so whatever init set up serves every environment.
+	state.AnyEnv = len(backendVarFiles) == 0
+
+	// The environment LazyTF initialised with beats a guess from the state key.
+	binding, bound := loadBinding(cacheDir, projectPath)
+	if bound {
+		state.DetectedEnv = binding.Env
+		state.MatchedBackends = MatchBackendsForEnv(binding.Env, backendVarFiles)
+	}
 
 	// Try to read .terraform/terraform.tfstate
 	tfstatePath := filepath.Join(terraformDir, "terraform.tfstate")
@@ -63,8 +78,12 @@ func DetectCurrentBackend(projectPath string, backendVarFiles []BackendVarFile) 
 		}
 	}
 
-	// Try to infer environment name from backend config
-	// Common patterns:
+	if bound {
+		return state
+	}
+
+	// No usable record: guess the environment from the backend config, a hint
+	// only. Common patterns:
 	// - S3 key: "dev2/terraform.tfstate" or "terraform.tfstate.d/dev2"
 	// - File path: "terraform-dev2.tfstate"
 	state.DetectedEnv = inferEnvFromBackendConfig(state.BackendConfig)
@@ -125,6 +144,12 @@ func inferEnvFromBackendConfig(config map[string]string) string {
 	}
 
 	return ""
+}
+
+// EnvReady reports whether commands for envName may run: the project is
+// initialised for that environment, or has no backend config files at all.
+func (s BackendState) EnvReady(envName string) bool {
+	return s.IsInitialized && (s.AnyEnv || s.DetectedEnv == envName)
 }
 
 // FormatBackendState creates a user-friendly string describing the current backend state.
