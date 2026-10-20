@@ -1,10 +1,10 @@
 ## item_004_release_packaging_license_goreleaser_aur_homebrew - Release packaging: LICENSE, GoReleaser, AUR, Homebrew
 > From version: 0.1.0
 > Schema version: 1.0
-> Status: Ready
+> Status: In progress
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 0%
+> Progress: 50%
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
@@ -61,3 +61,6 @@
 
 # Notes
 - Roadmap milestone: 1.0 - Public release (`road_001_lazytf_to_1_0`).
+
+# Tasks
+- `task_005_release_packaging_license_goreleaser_aur_homebrew`
