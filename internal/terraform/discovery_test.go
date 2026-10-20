@@ -124,14 +124,20 @@ func TestIsTerraformProject(t *testing.T) {
 	root := t.TempDir()
 	writeFiles(t, root, map[string]string{
 		"tf/main.tf":          "",
+		"json/main.tf.json":   "{}",
 		"none/README.md":      "",
-		"dironly/sub.tf/x.md": "", // a directory named *.tf is not a .tf file
+		"notjson/x.json":      "{}", // plain JSON is not Terraform
+		"jsondir/a.tf.json/x": "",   // a directory named *.tf.json is not a file
+		"dironly/sub.tf/x.md": "",   // a directory named *.tf is not a .tf file
 	})
 	tests := []struct {
 		dir  string
 		want bool
 	}{
 		{"tf", true},
+		{"json", true},
+		{"notjson", false},
+		{"jsondir", false},
 		{"none", false},
 		{"dironly", false},
 	}

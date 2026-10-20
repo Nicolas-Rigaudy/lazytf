@@ -27,7 +27,8 @@ func IsInitialized(path string) bool {
 	return info.IsDir()
 }
 
-// IsTerraformProject checks if a directory contains Terraform files (*.tf).
+// IsTerraformProject checks if a directory contains Terraform files (*.tf or
+// *.tf.json, the JSON syntax that generators such as CDKTF emit).
 // This is more permissive than IsInitialized - it finds uninitialized projects too.
 func IsTerraformProject(path string) (bool, error) {
 	entries, err := os.ReadDir(path)
@@ -35,7 +36,8 @@ func IsTerraformProject(path string) (bool, error) {
 		return false, err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".tf" {
+		name := entry.Name()
+		if !entry.IsDir() && (strings.HasSuffix(name, ".tf") || strings.HasSuffix(name, ".tf.json")) {
 			return true, nil
 		}
 	}
