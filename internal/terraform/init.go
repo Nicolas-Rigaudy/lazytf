@@ -39,8 +39,8 @@ func buildInitArgs(options InitOptions) []string {
 }
 
 // RunInit is the imperative shell: builds args, then executes.
-func RunInit(projectPath string, options InitOptions) tea.Cmd {
+func RunInit(bin, projectPath string, options InitOptions) tea.Cmd {
 	args := buildInitArgs(options)
-	result := executor.ExecuteStreaming("terraform", args, projectPath, false)
+	result := executor.ExecuteStreaming(Binary(bin), args, projectPath, false)
 	return result.Cmd
 }

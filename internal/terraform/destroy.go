@@ -20,9 +20,9 @@ func buildDestroyArgs(varFile VarFile) []string {
 
 // RunDestroy executes `terraform destroy -var-file=...` (imperative shell).
 // Always interactive - returns InteractiveResult with stdin writer for sending confirmation.
-func RunDestroy(projectPath string, varFile VarFile) InteractiveResult {
+func RunDestroy(bin, projectPath string, varFile VarFile) InteractiveResult {
 	args := buildDestroyArgs(varFile)
-	result := executor.ExecuteStreaming("terraform", args, projectPath, true)
+	result := executor.ExecuteStreaming(Binary(bin), args, projectPath, true)
 	return InteractiveResult{
 		Cmd:         result.Cmd,
 		StdinWriter: result.StdinWriter,

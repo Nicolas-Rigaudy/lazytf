@@ -16,6 +16,9 @@ const ProjectFileName = ".lazytf.yml"
 //
 // Globs are relative to the project root and may use "**" to span directories.
 type Layout struct {
+	// Terraform is the executable to run, "terraform" when empty. A name
+	// such as "tofu" is looked up on PATH; a path is used as given.
+	Terraform string `yaml:"terraform,omitempty"`
 	// VarFiles are the globs whose matches are environments.
 	VarFiles []string `yaml:"var_files"`
 	// BackendConfigs are the globs of files passed as -backend-config to init.

@@ -53,6 +53,7 @@ type Model struct {
 	selectedBackendFile     *terraform.BackendVarFile
 	backendState            terraform.BackendState
 	baseLayout              config.Layout       // global layout; a project's .lazytf.yml overrides it
+	terraformBin            string              // executable of the selected project ("" = terraform)
 	modal                   Modal               // Modal component
 	lastCommandMsg          tea.Msg             // Last terraform command message (for retry after AWS login)
 	pendingTerraformCommand func() tea.Msg      // Command to run after AWS login completes (set by detectCommonErrors)
@@ -63,25 +64,26 @@ type Model struct {
 
 // loadProjectFiles discovers a project's var files and backend configs under
 // its layout (the global one plus the project's .lazytf.yml). A layout that
-// cannot be read gives no files and a note for the status bar.
-func loadProjectFiles(path string, base config.Layout) ([]terraform.VarFile, []terraform.BackendVarFile, string) {
+// cannot be read gives no files and a note for the status bar. It also
+// returns the terraform executable the layout selects.
+func loadProjectFiles(path string, base config.Layout) (varFiles []terraform.VarFile, backends []terraform.BackendVarFile, bin, note string) {
 	layout, err := config.LoadLayout(path, base)
 	if err != nil {
-		return nil, nil, "✗ " + config.ProjectFileName + ": " + err.Error()
+		return nil, nil, base.Terraform, "✗ " + config.ProjectFileName + ": " + err.Error()
 	}
-	varFiles, err := terraform.DiscoverVarFiles(path, layout)
+	varFiles, err = terraform.DiscoverVarFiles(path, layout)
 	if err != nil {
-		return nil, nil, "✗ layout: " + err.Error()
+		return nil, nil, layout.Terraform, "✗ layout: " + err.Error()
 	}
-	backends, err := terraform.DiscoverBackendVarFiles(path, layout)
+	backends, err = terraform.DiscoverBackendVarFiles(path, layout)
 	if err != nil {
-		return nil, nil, "✗ layout: " + err.Error()
+		return nil, nil, layout.Terraform, "✗ layout: " + err.Error()
 	}
-	return terraform.WithDefaultEnv(varFiles), backends, ""
+	return terraform.WithDefaultEnv(varFiles), backends, layout.Terraform, ""
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.Layout) Model {
-	var notice string
+	var notice, terraformBin string
 	var sidebar SidebarModel
 	var viewMode ViewMode
 	var selectedProject *terraform.Project
@@ -96,7 +98,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.L
 		selectedProject = &projects[0]
 
 		// Discover var files and backends for the project
-		varFiles, backendVarFiles, notice = loadProjectFiles(selectedProject.Path, layout)
+		varFiles, backendVarFiles, terraformBin, notice = loadProjectFiles(selectedProject.Path, layout)
 		sidebarItems := terraform.GetVarFileDisplayNames(varFiles)
 
 		// Detect current backend initialization state
@@ -148,6 +150,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.L
 		selectedBackendFile: nil,
 		backendState:        backendState,
 		baseLayout:          layout,
+		terraformBin:        terraformBin,
 		notice:              notice,
 		modal:               modal,
 	}
@@ -572,7 +575,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedProject = selectedProject
 
 		// Discover var files and backends for the selected project
-		m.varFiles, m.backendVarFiles, m.notice = loadProjectFiles(selectedProject.Path, m.baseLayout)
+		m.varFiles, m.backendVarFiles, m.terraformBin, m.notice = loadProjectFiles(selectedProject.Path, m.baseLayout)
 		sidebarItems := terraform.GetVarFileDisplayNames(m.varFiles)
 
 		// Detect current backend initialization state
@@ -738,7 +741,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store this command in case we need to retry after AWS login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
-		cmd := terraform.RunInit(msg.ProjectPath, msg.Options)
+		cmd := terraform.RunInit(m.terraformBin, msg.ProjectPath, msg.Options)
 		return m, cmd
 
 	case ApplyConfirmedMsg:
@@ -808,7 +811,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store this command in case we need to retry after AWS login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
-		cmd := terraform.RunPlan(msg.ProjectPath, msg.VarFile)
+		cmd := terraform.RunPlan(m.terraformBin, msg.ProjectPath, msg.VarFile)
 		return m, cmd
 
 	case RunApplyMsg:
@@ -817,7 +820,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prepareCommandExecution()
 
 		// Run terraform apply (without auto-approve) - returns stdin writer
-		result := terraform.RunApply(msg.ProjectPath, msg.VarFile, msg.PlanFile)
+		result := terraform.RunApply(m.terraformBin, msg.ProjectPath, msg.VarFile, msg.PlanFile)
 
 		if msg.PlanFile != "" {
 			m.mainPanel.Title = "⏳ Applying saved plan..."
@@ -840,7 +843,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prepareCommandExecution()
 
 		// Run terraform destroy (without auto-approve) - returns stdin writer
-		result := terraform.RunDestroy(msg.ProjectPath, msg.VarFile)
+		result := terraform.RunDestroy(m.terraformBin, msg.ProjectPath, msg.VarFile)
 
 		m.mainPanel.Title = "⏳ Destroying..."
 		// Store the interactive command state
@@ -937,7 +940,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if planMsg, ok := m.lastCommandMsg.(RunPlanMsg); ok {
 			planFile := terraform.PlanFilePath(planMsg.ProjectPath, planMsg.VarFile.EnvName)
-			planJSON, err := terraform.RunShowPlanJSON(planMsg.ProjectPath, planFile)
+			planJSON, err := terraform.RunShowPlanJSON(m.terraformBin, planMsg.ProjectPath, planFile)
 			if err != nil {
 				m.mainPanel.Title = "❌ Failed to parse plan"
 				m.mainPanel.HasError = true

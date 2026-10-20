@@ -31,8 +31,8 @@ func ParsePlanJSON(jsonData []byte) (*PlanSummary, error) {
 	return &plan, nil
 }
 
-func RunShowPlanJSON(projectPath string, planFilePath string) ([]byte, error) {
-	cmd := exec.Command("terraform", "show", "-json", planFilePath)
+func RunShowPlanJSON(bin, projectPath string, planFilePath string) ([]byte, error) {
+	cmd := exec.Command(Binary(bin), "show", "-json", planFilePath)
 	cmd.Dir = projectPath
 	return cmd.Output()
 }

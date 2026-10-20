@@ -39,9 +39,9 @@ func buildApplyArgs(varFile VarFile, planFile string) ([]string, bool) {
 
 // RunApply executes `terraform apply -var-file=...` (imperative shell).
 // Returns both the command and a stdin writer to send "yes" confirmation later
-func RunApply(projectPath string, varFile VarFile, planFile string) InteractiveResult {
+func RunApply(bin, projectPath string, varFile VarFile, planFile string) InteractiveResult {
 	args, withStdin := buildApplyArgs(varFile, planFile)
-	result := executor.ExecuteStreaming("terraform", args, projectPath, withStdin)
+	result := executor.ExecuteStreaming(Binary(bin), args, projectPath, withStdin)
 	return InteractiveResult{
 		Cmd:         result.Cmd,
 		StdinWriter: result.StdinWriter,

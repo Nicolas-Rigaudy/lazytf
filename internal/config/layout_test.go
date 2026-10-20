@@ -48,6 +48,15 @@ func TestLoadLayout(t *testing.T) {
 			},
 		},
 		{
+			name:    "terraform binary can be set per project",
+			content: ptr("terraform: tofu\n"),
+			check: func(t *testing.T, got Layout) {
+				if got.Terraform != "tofu" {
+					t.Errorf("Terraform = %q, want tofu", got.Terraform)
+				}
+			},
+		},
+		{
 			name:    "invalid yaml returns the base and an error",
 			content: ptr("var_files: [unclosed\n"),
 			wantErr: true,

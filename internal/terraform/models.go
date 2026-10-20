@@ -45,6 +45,15 @@ const (
 	ModeMultiProject
 )
 
+// Binary returns the executable to run: the configured one, or "terraform".
+// A name such as "tofu" is looked up on PATH.
+func Binary(configured string) string {
+	if configured == "" {
+		return "terraform"
+	}
+	return configured
+}
+
 // NoVarFileEnv is the name of the stand-in environment of a project with no
 // var files, so it can still be planned and applied.
 const NoVarFileEnv = "(no var-file)"
