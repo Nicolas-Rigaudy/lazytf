@@ -1,14 +1,14 @@
 ## item_001_configurable_project_env_and_backend_layout - Configurable project, environment and backend layout
 > From version: 0.1.0
 > Schema version: 1.0
-> Status: Ready
+> Status: Done
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 0%
+> Progress: 100%
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
-> Indicators reviewed: 2026-10-19 15:50:26
+> Indicators reviewed: 2026-10-20 18:21:25
 
 # AI Context
 - Summary: Replace the hardcoded tfvars/backend layout and the state-key env inference with configurable globs and an explicit env/backend binding, so any repo can plan and apply.
@@ -54,7 +54,7 @@
 - Product brief(s): `prod_001_lazytf_a_keyboard_driven_terraform_cockpit`
 - Architecture decision(s): (none yet)
 - Request: `req_000_lazytf_1_0_public_release`
-- Primary task(s): (none yet)
+- Primary task(s): `task_002_configurable_project_environment_and_backend_layout`
 
 # Priority
 - Priority: High
@@ -62,3 +62,7 @@
 
 # Notes
 - Roadmap milestone: 0.3 - Any layout, any cloud (`road_001_lazytf_to_1_0`).
+- Task `task_002_configurable_project_environment_and_backend_layout` was finished via `logics-manager flow finish task` on 2026-10-20.
+
+# Tasks
+- `task_002_configurable_project_environment_and_backend_layout`
