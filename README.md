@@ -185,6 +185,16 @@ auth:
   error_patterns: ["session expired"]   # matched without regard to case; also extends the presets
 ```
 
+To use another account or profile per environment, set variables under `auth.env`; they are added to every terraform command and to the login command LazyTF runs for that environment:
+
+```yaml
+auth:
+  provider: aws-sso
+  env:
+    dev:  { AWS_PROFILE: dev-profile }
+    prod: { AWS_PROFILE: prod-profile }
+```
+
 `login` overrides a preset's command too. Upgrading from 0.1: the AWS SSO login used to be on by default; add the `aws-sso` provider above to keep it.
 
 ### Key Bindings
