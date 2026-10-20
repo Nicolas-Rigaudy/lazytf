@@ -63,6 +63,26 @@ sudo mv lazytf /usr/local/bin/
 
 On ARM (e.g. a Graviton box or ARM laptop), swap `amd64` for `arm64`. Or grab a binary from the [Releases page](https://github.com/Nicolas-Rigaudy/lazytf/releases).
 
+### macOS (prebuilt binary)
+
+Archives for Intel (`amd64`) and Apple Silicon (`arm64`) are published from the first release after v0.1.0, named `lazytf_Darwin_amd64.tar.gz` and `lazytf_Darwin_arm64.tar.gz`. They are not code-signed, so Gatekeeper blocks the first run of a downloaded binary. Clear the quarantine flag once:
+
+```bash
+tar xzf lazytf_Darwin_arm64.tar.gz
+xattr -d com.apple.quarantine lazytf
+sudo mv lazytf /usr/local/bin/
+```
+
+Downloading with `curl` (as in the Linux example) does not set the flag.
+
+### With `go install`
+
+```bash
+go install github.com/Nicolas-Rigaudy/lazytf/cmd/lazytf@latest
+```
+
+This puts `lazytf` in `$(go env GOPATH)/bin`; `lazytf --version` reports the module version.
+
 ### From source
 
 ```bash
