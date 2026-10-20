@@ -7,10 +7,11 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 
-	"github.com/Nicolas-Rigaudy/lazytf/internal/config"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/ui"
 
@@ -18,34 +19,36 @@ import (
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.Load()
+	opts, err := parseArgs(os.Args[1:], os.Stderr)
+	if errors.Is(err, flag.ErrHelp) {
+		return
+	}
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "lazytf: %v\nTry 'lazytf --help'.\n", err)
+		os.Exit(2)
+	}
+	if opts.showVersion {
+		fmt.Println("lazytf " + versionString())
+		return
 	}
 
-	// Determine mode
-	mode, project, err := terraform.DetermineMode()
+	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Printf("Error determining mode: %v\n", err)
+		fmt.Fprintf(os.Stderr, "lazytf: %v\n", err)
 		os.Exit(1)
 	}
-
-	var projects []terraform.Project
-	switch mode {
-	case terraform.ModeSingleProject:
-		projects = []terraform.Project{*project}
-	case terraform.ModeMultiProject:
-		projects, err = terraform.DiscoverProjects(cfg)
-		if err != nil {
-			fmt.Printf("Error discovering projects: %v\n", err)
-			os.Exit(1)
-		}
+	st, err := resolveStart(opts, cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "lazytf: %v\n", err)
+		os.Exit(1)
+	}
+	if err := checkBinary(st.cfg.Terraform); err != nil {
+		fmt.Fprintf(os.Stderr, "lazytf: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Initialize UI model
-	m := ui.NewModel(projects, mode, cfg.Layout)
+	m := ui.NewModel(st.projects, st.mode, st.cfg.Layout)
 	if note := terraform.CleanupLegacyPlans(); note != "" {
 		m.SetNotice(note)
 	}

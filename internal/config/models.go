@@ -11,11 +11,9 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Layout: DefaultLayout(),
-		SearchPaths: []string{
-			".",
-			"~/Projects",
-			"~/Documents",
-		},
+		// Only the working directory: LazyTF never scans home folders the
+		// user did not name.
+		SearchPaths: []string{"."},
 		IgnorePatterns: []string{
 			"*/node_modules",
 			"*/.git",

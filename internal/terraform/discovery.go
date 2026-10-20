@@ -4,7 +4,7 @@
 // This file contains all project discovery and detection logic:
 // - IsInitialized: Check if a directory has .terraform/
 // - IsTerraformProject: Check if a directory contains .tf files
-// - DetermineMode: Decide between single-project vs multi-project mode
+// - DetermineMode: Decide between single-project vs multi-project mode for a directory
 // - DiscoverProjects: Find all Terraform projects in search paths
 package terraform
 
@@ -44,21 +44,22 @@ func IsTerraformProject(path string) (bool, error) {
 	return false, nil
 }
 
-// DetermineMode checks the current directory and decides which mode to run in.
-// Returns ModeSingleProject if current directory is an initialized TF project,
-// otherwise returns ModeMultiProject.
+// DetermineMode decides which mode to run in for dir (the working directory
+// or a path given on the command line). Returns ModeSingleProject if dir is a
+// Terraform project, initialised or not, otherwise ModeMultiProject.
 // If ModeSingleProject, also returns a Project struct with basic info.
-func DetermineMode() (Mode, *Project, error) {
-	workDir, err := os.Getwd()
+func DetermineMode(dir string) (Mode, *Project, error) {
+	isTF, err := IsTerraformProject(dir)
 	if err != nil {
 		return ModeMultiProject, nil, err
 	}
 
-	if IsInitialized(workDir) {
+	initialized := IsInitialized(dir)
+	if isTF || initialized {
 		project := Project{
-			Name:             filepath.Base(workDir),
-			Path:             workDir,
-			IsInitialized:    true,
+			Name:             filepath.Base(dir),
+			Path:             dir,
+			IsInitialized:    initialized,
 			Workspaces:       nil,
 			CurrentWorkspace: "",
 		}

@@ -31,6 +31,15 @@ func Load() (Config, error) {
 	return loadFrom(configPath)
 }
 
+// LoadFile is Load for an explicit path (the --config flag). Unlike the
+// default location, a file that was asked for by name must exist.
+func LoadFile(path string) (Config, error) {
+	if _, err := os.Stat(path); err != nil {
+		return DefaultConfig(), err
+	}
+	return loadFrom(path)
+}
+
 // loadFrom reads the config at path over the defaults: keys the file does not
 // set keep their default value, so a file with only search_paths still gets
 // the default ignore patterns.

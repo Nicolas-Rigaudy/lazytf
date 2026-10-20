@@ -148,3 +148,39 @@ func TestIsTerraformProject(t *testing.T) {
 		}
 	}
 }
+
+func TestDetermineMode(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"fresh/main.tf":         "",   // not initialised yet
+		"jsononly/main.tf.json": "{}", // generated project
+		"inited/.terraform/x":   "",   // initialised, no .tf at the top (modules elsewhere)
+		"parent/app/main.tf":    "",   // a directory above projects
+		"empty/README.md":       "",
+	})
+	tests := []struct {
+		dir      string
+		mode     Mode
+		wantInit bool
+	}{
+		{"fresh", ModeSingleProject, false},
+		{"jsononly", ModeSingleProject, false},
+		{"inited", ModeSingleProject, true},
+		{"parent", ModeMultiProject, false},
+		{"empty", ModeMultiProject, false},
+	}
+	for _, tt := range tests {
+		dir := filepath.Join(root, tt.dir)
+		mode, project, err := DetermineMode(dir)
+		if err != nil || mode != tt.mode {
+			t.Errorf("DetermineMode(%s) = %v, %v; want %v", tt.dir, mode, err, tt.mode)
+			continue
+		}
+		if tt.mode == ModeSingleProject && (project == nil || project.Path != dir || project.IsInitialized != tt.wantInit) {
+			t.Errorf("DetermineMode(%s) project = %+v, want path %s initialised=%v", tt.dir, project, dir, tt.wantInit)
+		}
+	}
+	if _, _, err := DetermineMode(filepath.Join(root, "missing")); err == nil {
+		t.Error("DetermineMode(missing dir) returned no error")
+	}
+}
