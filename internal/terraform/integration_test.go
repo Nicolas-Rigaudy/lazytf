@@ -13,9 +13,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
-
 	"github.com/Nicolas-Rigaudy/lazytf/internal/config"
+	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 )
 
 // run drives a command through the executor the way the UI does and returns
@@ -128,5 +127,50 @@ func TestIntegrationInitPlanApply(t *testing.T) {
 	out, ok = run(t, "destroy", destroy.Cmd, 3*time.Minute)
 	if !ok || !strings.Contains(out, "Destroy complete") {
 		t.Fatalf("destroy: ok=%v, output:\n%s", ok, out)
+	}
+}
+
+// TestIntegrationNoVarFilesLocalBackend covers a project with no tfvars and no
+// backend config: it gets the stand-in environment, inits without
+// -backend-config, plans and applies.
+func TestIntegrationNoVarFilesLocalBackend(t *testing.T) {
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Fatal("terraform not on PATH; the integration test needs it")
+	}
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TF_IN_AUTOMATION", "1")
+
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS("testdata/fixture-novars")); err != nil {
+		t.Fatal(err)
+	}
+
+	layout := config.DefaultLayout()
+	discovered, _ := DiscoverVarFiles(dir, layout)
+	varFiles := WithDefaultEnv(discovered)
+	env := varFiles[0]
+	if env.EnvName != NoVarFileEnv {
+		t.Fatalf("env = %+v, want the stand-in", env)
+	}
+	backends, _ := DiscoverBackendVarFiles(dir, layout)
+
+	mustRun(t, "init", RunInit(dir, InitOptions{}))
+	if err := RecordInit(dir, env.EnvName, BackendVarFile{}); err != nil {
+		t.Fatal(err)
+	}
+	state := DetectCurrentBackend(dir, backends)
+	if !state.EnvReady(env.EnvName) {
+		t.Fatalf("after init: state %+v is not ready for %q", state, env.EnvName)
+	}
+
+	mustRun(t, "plan", RunPlan(dir, env))
+	planFile := PlanFilePath(dir, env.EnvName)
+	if _, err := os.Stat(planFile); err != nil {
+		t.Fatalf("saved plan missing: %v", err)
+	}
+	apply := RunApply(dir, env, planFile)
+	mustRun(t, "apply saved plan", apply.Cmd)
+	if _, err := os.Stat(filepath.Join(dir, "terraform.tfstate")); err != nil {
+		t.Fatalf("local state not written: %v", err)
 	}
 }
