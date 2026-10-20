@@ -90,7 +90,7 @@ func TestLoginKeyOnlyWithProvider(t *testing.T) {
 		t.Errorf("status = %q, want no login hint without a provider", m.buildStatusText())
 	}
 	m.authProvider = providerFor(t, auth.Config{Provider: auth.Az})
-	if !strings.Contains(m.buildStatusText(), "shift+l: login") || strings.Contains(m.buildStatusText(), "aws") {
+	if !strings.Contains(m.buildStatusText(), "L: login") || strings.Contains(m.buildStatusText(), "aws") {
 		t.Errorf("status = %q, want a neutral login hint", m.buildStatusText())
 	}
 }
@@ -134,5 +134,17 @@ func TestToolCarriesPerEnvVariables(t *testing.T) {
 	var bare Model
 	if got := bare.tool("dev"); got.Bin != "" || len(got.Env) != 0 {
 		t.Errorf("tool with no auth = %+v, want zero", got)
+	}
+}
+
+func TestStatusHintsFollowTheHelpList(t *testing.T) {
+	m := Model{viewMode: ViewModeProjectDetail, authProvider: providerFor(t, auth.Config{Provider: auth.GCloud})}
+	status := m.buildStatusText()
+	for _, group := range DefaultKeyBindings(true) {
+		for _, kb := range group.KeyBindings {
+			if kb.Hint != "" && !strings.Contains(status, kb.Hint) {
+				t.Errorf("status %q lacks the hint %q of help key %q", status, kb.Hint, kb.Key)
+			}
+		}
 	}
 }

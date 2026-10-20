@@ -1,9 +1,12 @@
 package ui
 
+// KeyBinding is one entry of the help modal. The status bar's hints come from
+// the same list (Hint), so the two cannot drift apart.
 type KeyBinding struct {
 	Key         string
 	Description string
 	Enabled     bool
+	Hint        string // status bar text in detail view, "" = not shown there
 }
 
 type KeyBindingGroup struct {
@@ -39,18 +42,31 @@ func DefaultKeyBindings(loginEnabled bool) []KeyBindingGroup {
 		{
 			Title: "Terraform",
 			KeyBindings: []KeyBinding{
-				{Key: "i", Description: "Init", Enabled: true},
-				{Key: "v", Description: "Validate", Enabled: false},
-				{Key: "f", Description: "Format", Enabled: false},
-				{Key: "d", Description: "Destroy", Enabled: true},
-				{Key: "p", Description: "Plan", Enabled: true},
-				{Key: "a", Description: "Apply", Enabled: true},
+				{Key: "i", Description: "Init", Enabled: true, Hint: "i: init"},
+				{Key: "v", Description: "Toggle plan summary / raw output", Enabled: true},
+				{Key: "d", Description: "Destroy", Enabled: true, Hint: "d: destroy"},
+				{Key: "p", Description: "Plan", Enabled: true, Hint: "p: plan"},
+				{Key: "a", Description: "Apply", Enabled: true, Hint: "a: apply"},
 			},
 		},
 	}
 	if loginEnabled {
 		terraform := &groups[2].KeyBindings
-		*terraform = append([]KeyBinding{{Key: "L", Description: "Login", Enabled: true}}, *terraform...)
+		*terraform = append([]KeyBinding{{Key: "L", Description: "Login", Enabled: true, Hint: "L: login"}}, *terraform...)
 	}
 	return groups
+}
+
+// detailHints returns the status bar hints for the Terraform keys, in the
+// order they are listed in the help modal.
+func detailHints(loginEnabled bool) []string {
+	var hints []string
+	for _, group := range DefaultKeyBindings(loginEnabled) {
+		for _, kb := range group.KeyBindings {
+			if kb.Enabled && kb.Hint != "" {
+				hints = append(hints, kb.Hint)
+			}
+		}
+	}
+	return hints
 }

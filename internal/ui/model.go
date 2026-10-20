@@ -346,10 +346,7 @@ func (m Model) buildStatusText() string {
 		if m.mode == terraform.ModeMultiProject {
 			parts = append(parts, "Backspace: back", "│")
 		}
-		parts = append(parts, "i: init", "p: plan", "a: apply", "d: destroy")
-		if m.authProvider != nil {
-			parts = append(parts, "shift+l: login")
-		}
+		parts = append(parts, detailHints(m.authProvider != nil)...)
 		parts = append(parts, "│")
 	}
 

@@ -89,11 +89,21 @@ cd ~/infra
 lazytf
 ```
 
+```bash
+lazytf                 # the current directory: one project, or a scan for projects
+lazytf ~/infra/app     # open that project
+lazytf ~/infra         # scan that directory for projects
+lazytf --config ./lazytf.yml
+lazytf --version       # also: --help
+```
+
+If `terraform` is not on your `PATH`, LazyTF says so and exits before drawing anything (set `terraform: tofu`, or a full path, in the config to use another binary).
+
 ### First run — how LazyTF finds your stuff
 
 You don't configure anything to start. LazyTF discovers projects and environments by convention:
 
-- **Single vs. multi-project** — if the current directory is already initialized (has a `.terraform/` folder), LazyTF opens it directly. Otherwise it scans your search paths and lists every project it finds in the sidebar. A "project" is any directory containing `.tf` or `.tf.json` files (the JSON syntax that CDKTF and other generators write).
+- **Single vs. multi-project** — if the current directory holds Terraform files (or already has a `.terraform/` folder), LazyTF opens it directly, initialised or not. Otherwise it scans your search paths (by default just the current directory) and lists every project it finds in the sidebar. It never scans folders you did not name. A "project" is any directory containing `.tf` or `.tf.json` files (the JSON syntax that CDKTF and other generators write).
 - **Environments** — inside a project, each `*.tfvars` file is an environment. LazyTF looks in the project root and in `variables/`, `env/`, and `tfvars/`. `dev.tfvars` shows up as the `dev` environment. `terraform.tfvars` and `*.auto.tfvars` are not environments: Terraform loads them by itself. A project with no var files gets one environment, `(no var-file)`, so it can still be planned.
 - **Backends** — backend configs live under `variables/backend/**/*.tfvars`. A file named `backend_dev.tfvars` is auto-matched to the `dev` environment; a plain `backend.tfvars` applies to all. A project with no backend config files (local state, or a backend written in the `.tf` files) is initialised without `-backend-config`.
 - **Which environment is initialised** — LazyTF remembers the environment and backend file of its last `init` (in `~/.cache/lazytf/init/`) and checks it against the backend Terraform recorded in `.terraform/terraform.tfstate`. If you re-init by hand, it falls back to guessing from the state key.
@@ -113,7 +123,7 @@ my-project/
 
 ### Configuration (optional)
 
-By default LazyTF searches `.`, `~/Projects`, and `~/Documents`. To point it at your infra directory instead, create `~/.config/lazytf/config.yml`:
+By default LazyTF searches only the current directory. To point it at your infra directories instead, create `~/.config/lazytf/config.yml`:
 
 ```yaml
 search_paths:
