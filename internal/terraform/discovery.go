@@ -35,13 +35,17 @@ func IsTerraformProject(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	return hasTerraformFiles(entries), nil
+}
+
+func hasTerraformFiles(entries []os.DirEntry) bool {
 	for _, entry := range entries {
 		name := entry.Name()
 		if !entry.IsDir() && (strings.HasSuffix(name, ".tf") || strings.HasSuffix(name, ".tf.json")) {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 // DetermineMode decides which mode to run in for dir (the working directory
@@ -114,56 +118,41 @@ func DiscoverProjects(cfg config.Config) ([]Project, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = filepath.Walk(searchPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil // Skip paths we can't read
-			}
-
-			// Check if we should ignore this path
-			if shouldIgnore(path, cfg.IgnorePatterns) {
-				if info.IsDir() {
-					return filepath.SkipDir // Don't descend into ignored dirs
-				}
-				return nil // Skip ignored files
-			}
-
-			// Only check directories
-			if !info.IsDir() {
-				return nil
-			}
-
-			// Check if this directory is a TF project
-			isTF, err := IsTerraformProject(path)
-			if err != nil {
-				return nil // Skip on error
-			}
-
-			if isTF {
-				// Create and add project
-				project := Project{
-					Name:             filepath.Base(path),
-					Path:             path,
-					Workspaces:       nil,
-					CurrentWorkspace: "",
-					IsInitialized:    IsInitialized(path),
-				}
-				projects = append(projects, project)
-
-				// Don't search inside TF projects (they're already found)
-				return filepath.SkipDir
-			}
-
-			return nil // Continue walking
-		})
-		if err != nil {
-			return nil, err
-		}
+		projects = scanForProjects(searchPath, cfg.IgnorePatterns, projects)
 	}
 
 	// Remove duplicates and make project names unique
 	projects = makeProjectNamesUnique(projects)
 
 	return projects, nil
+}
+
+// scanForProjects walks dir and appends every Terraform project found. It
+// reads each directory once: the same listing decides whether the directory
+// is a project and which subdirectories to descend into. Symlinked
+// directories are not followed, and unreadable ones are skipped.
+func scanForProjects(dir string, ignore []string, projects []Project) []Project {
+	if shouldIgnore(dir, ignore) {
+		return projects
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return projects
+	}
+	if hasTerraformFiles(entries) {
+		// Don't search inside TF projects (they're already found)
+		return append(projects, Project{
+			Name:          filepath.Base(dir),
+			Path:          dir,
+			IsInitialized: IsInitialized(dir),
+		})
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			projects = scanForProjects(filepath.Join(dir, entry.Name()), ignore, projects)
+		}
+	}
+	return projects
 }
 
 // makeProjectNamesUnique removes duplicate projects (by path) and ensures
