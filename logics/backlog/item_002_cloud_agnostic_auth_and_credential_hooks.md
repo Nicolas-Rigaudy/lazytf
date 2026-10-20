@@ -1,13 +1,14 @@
 ## item_002_cloud_agnostic_auth_and_credential_hooks - Cloud-agnostic auth and credential hooks
 > From version: 0.1.0
 > Schema version: 1.0
-> Status: Ready
+> Status: Done
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 0%
+> Progress: 100%
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
+> Indicators reviewed: 2026-10-20 18:24:48
 
 # AI Context
 - Summary: Turn the hardwired AWS SSO login and AWS error detection into optional, pluggable auth providers (AWS SSO, gcloud, az, custom command).
@@ -46,7 +47,7 @@
 - Product brief(s): `prod_001_lazytf_a_keyboard_driven_terraform_cockpit`
 - Architecture decision(s): (none yet)
 - Request: `req_000_lazytf_1_0_public_release`
-- Primary task(s): (none yet)
+- Primary task(s): `task_003_cloud_agnostic_auth_and_credential_hooks`
 
 # Priority
 - Priority: Medium
@@ -54,3 +55,7 @@
 
 # Notes
 - Roadmap milestone: 0.3 - Any layout, any cloud (`road_001_lazytf_to_1_0`).
+- Task `task_003_cloud_agnostic_auth_and_credential_hooks` was finished via `logics-manager flow finish task` on 2026-10-20.
+
+# Tasks
+- `task_003_cloud_agnostic_auth_and_credential_hooks`
