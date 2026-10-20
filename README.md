@@ -93,9 +93,10 @@ lazytf
 
 You don't configure anything to start. LazyTF discovers projects and environments by convention:
 
-- **Single vs. multi-project** — if the current directory is already initialized (has a `.terraform/` folder), LazyTF opens it directly. Otherwise it scans your search paths and lists every project it finds in the sidebar. A "project" is any directory containing `.tf` files.
-- **Environments** — inside a project, each `*.tfvars` file is an environment. LazyTF looks in the project root and in `variables/`, `env/`, and `tfvars/`. `dev.tfvars` shows up as the `dev` environment.
-- **Backends** — backend configs live under `variables/backend/**/*.tfvars`. A file named `backend_dev.tfvars` is auto-matched to the `dev` environment; a plain `backend.tfvars` applies to all.
+- **Single vs. multi-project** — if the current directory is already initialized (has a `.terraform/` folder), LazyTF opens it directly. Otherwise it scans your search paths and lists every project it finds in the sidebar. A "project" is any directory containing `.tf` or `.tf.json` files (the JSON syntax that CDKTF and other generators write).
+- **Environments** — inside a project, each `*.tfvars` file is an environment. LazyTF looks in the project root and in `variables/`, `env/`, and `tfvars/`. `dev.tfvars` shows up as the `dev` environment. `terraform.tfvars` and `*.auto.tfvars` are not environments: Terraform loads them by itself. A project with no var files gets one environment, `(no var-file)`, so it can still be planned.
+- **Backends** — backend configs live under `variables/backend/**/*.tfvars`. A file named `backend_dev.tfvars` is auto-matched to the `dev` environment; a plain `backend.tfvars` applies to all. A project with no backend config files (local state, or a backend written in the `.tf` files) is initialised without `-backend-config`.
+- **Which environment is initialised** — LazyTF remembers the environment and backend file of its last `init` (in `~/.cache/lazytf/init/`) and checks it against the backend Terraform recorded in `.terraform/terraform.tfstate`. If you re-init by hand, it falls back to guessing from the state key.
 
 So a typical layout LazyTF understands out of the box:
 
@@ -126,6 +127,40 @@ ignore_patterns:
 ```
 
 The file is optional — sensible defaults apply if it's absent. Any key you leave out keeps its default, so a file with only `search_paths` still uses the ignore patterns above.
+
+### Layout (optional)
+
+If your repo does not follow the layout above, say where things are. Put a `.lazytf.yml` in the project root, or the same keys in `~/.config/lazytf/config.yml` to set them for every project (a key in `.lazytf.yml` wins). Globs are relative to the project root; `**` spans directories.
+
+| Key | Meaning | Default |
+|-----|---------|---------|
+| `var_files` | Globs whose matches are environments | `*.tfvars`, `variables/*.tfvars`, `env/*.tfvars`, `tfvars/*.tfvars` |
+| `backend_configs` | Globs of files passed as `-backend-config` | `variables/backend/**/*.tfvars` |
+| `exclude` | Var files that are not environments (a glob without `/` matches the file name) | `terraform.tfvars`, `*.auto.tfvars` |
+| `include` | Var files to list even when `exclude` matches | none |
+| `env_pattern` | Regex with one capture group, applied to the var file name without extension | the whole name |
+| `backend_env_pattern` | Same, for backend config files | `backend_<env>`; a bare `backend` is shared |
+| `terraform` | Executable to run, e.g. `tofu` or a full path | `terraform` |
+
+A key you leave out keeps its default; `exclude: []` clears one. Three layouts:
+
+```yaml
+# 1. GCS backend, envs/dev.tfvars + backends/dev.hcl
+var_files: ["envs/*.tfvars"]
+backend_configs: ["backends/*.hcl"]
+```
+
+```yaml
+# 2. Local backend, one var file per environment: nothing to configure.
+#    (No backend config files means init runs without -backend-config.)
+```
+
+```yaml
+# 3. Var files named vars-<env>.tfvars next to the code, OpenTofu
+var_files: ["vars-*.tfvars"]
+env_pattern: '^vars-(.+)$'
+terraform: tofu
+```
 
 ### Key Bindings
 
