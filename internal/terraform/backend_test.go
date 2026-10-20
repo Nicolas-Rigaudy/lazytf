@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/Nicolas-Rigaudy/lazytf/internal/config"
 )
 
 func TestExtractEnvFromBackendFile(t *testing.T) {
@@ -30,7 +32,7 @@ func TestDiscoverBackendVarFiles(t *testing.T) {
 		"variables/backend/s3/README.md":             "",
 		"variables/dev.tfvars":                       "", // a var file, not a backend config
 	})
-	got, err := DiscoverBackendVarFiles(root)
+	got, err := DiscoverBackendVarFiles(root, config.DefaultLayout())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +50,7 @@ func TestDiscoverBackendVarFiles(t *testing.T) {
 }
 
 func TestDiscoverBackendVarFilesNoBackendDir(t *testing.T) {
-	got, err := DiscoverBackendVarFiles(t.TempDir())
+	got, err := DiscoverBackendVarFiles(t.TempDir(), config.DefaultLayout())
 	if err != nil || len(got) != 0 {
 		t.Errorf("DiscoverBackendVarFiles() = %v, %v; want none and no error", got, err)
 	}
@@ -80,5 +82,56 @@ func TestMatchBackendsForEnv(t *testing.T) {
 				t.Errorf("MatchBackendsForEnv(%q) = %+v, want %+v", tt.env, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDiscoverBackendVarFilesLayout(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"backends/dev.hcl":  "",
+		"backends/prod.hcl": "",
+		"backends/notes.md": "",
+	})
+	got, err := DiscoverBackendVarFiles(root, config.Layout{BackendConfigs: []string{"backends/*.hcl"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []BackendVarFile{
+		{Name: "dev.hcl", Path: "backends", FullPath: filepath.Join(root, "backends", "dev.hcl"), EnvName: "dev"},
+		{Name: "prod.hcl", Path: "backends", FullPath: filepath.Join(root, "backends", "prod.hcl"), EnvName: "prod"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestDiscoverBackendVarFilesEnvPattern(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"be/state-dev.hcl": ""})
+	got, err := DiscoverBackendVarFiles(root, config.Layout{BackendConfigs: []string{"be/*.hcl"}, BackendEnvPattern: `^state-(.+)$`})
+	if err != nil || len(got) != 1 || got[0].EnvName != "dev" {
+		t.Errorf("got %+v, %v; want one backend for env dev", got, err)
+	}
+}
+
+func TestMatchGlob(t *testing.T) {
+	tests := []struct {
+		pattern, rel string
+		want         bool
+	}{
+		{"*.tfvars", "dev.tfvars", true},
+		{"*.tfvars", "a/dev.tfvars", false},
+		{"**/*.tfvars", "dev.tfvars", true},
+		{"**/*.tfvars", "a/b/dev.tfvars", true},
+		{"a/**/x.hcl", "a/x.hcl", true},
+		{"a/**/x.hcl", "a/b/c/x.hcl", true},
+		{"a/**/x.hcl", "b/x.hcl", false},
+		{"envs/[dp]*.tfvars", "envs/dev.tfvars", true},
+		{"envs/[dp]*.tfvars", "envs/qa.tfvars", false},
+	}
+	for _, tt := range tests {
+		if got := matchGlob(tt.pattern, tt.rel); got != tt.want {
+			t.Errorf("matchGlob(%q, %q) = %v, want %v", tt.pattern, tt.rel, got, tt.want)
+		}
 	}
 }

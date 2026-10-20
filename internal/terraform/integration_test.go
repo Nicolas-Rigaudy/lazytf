@@ -14,6 +14,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
+
+	"github.com/Nicolas-Rigaudy/lazytf/internal/config"
 )
 
 // run drives a command through the executor the way the UI does and returns
@@ -65,12 +67,12 @@ func TestIntegrationInitPlanApply(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	varFiles, _ := DiscoverVarFiles(dir)
+	varFiles, _ := DiscoverVarFiles(dir, config.DefaultLayout())
 	dev, _ := FindVarFileByEnvName("dev", varFiles)
 	if dev == nil {
 		t.Fatalf("dev var file not discovered: %+v", varFiles)
 	}
-	backends, _ := DiscoverBackendVarFiles(dir)
+	backends, _ := DiscoverBackendVarFiles(dir, config.DefaultLayout())
 	devBackends := MatchBackendsForEnv("dev", backends)
 	if len(devBackends) != 1 {
 		t.Fatalf("dev backend config not matched: %+v", backends)

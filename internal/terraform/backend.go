@@ -9,78 +9,52 @@
 package terraform
 
 import (
-	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"github.com/Nicolas-Rigaudy/lazytf/internal/config"
 )
 
-// DiscoverBackendVarFiles scans for backend configuration files in the project.
-// It looks for .tfvars files in variables/backend/** subdirectories.
-func DiscoverBackendVarFiles(projectPath string) ([]BackendVarFile, error) {
+// DiscoverBackendVarFiles lists the backend config files matching
+// layout.BackendConfigs. A missing project directory gives no files.
+func DiscoverBackendVarFiles(projectPath string, layout config.Layout) ([]BackendVarFile, error) {
 	var backendFiles []BackendVarFile
-
-	// Look for backend configs in variables/backend/**/*.tfvars
-	backendDir := filepath.Join(projectPath, "variables", "backend")
-
-	// Check if backend directory exists
-	if _, err := os.Stat(backendDir); os.IsNotExist(err) {
-		// No backend directory, return empty list
-		return backendFiles, nil
-	}
-
-	// Walk the backend directory recursively
-	err := filepath.Walk(backendDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip paths we can't read
-		}
-
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Only process .tfvars files
-		if !strings.HasSuffix(info.Name(), ".tfvars") {
-			return nil
-		}
-
-		// Get relative path from project root
-		relPath, err := filepath.Rel(projectPath, filepath.Dir(path))
-		if err != nil {
-			relPath = filepath.Dir(path)
-		}
-
-		// Extract environment name from filename
-		// e.g., "backend_dev2.tfvars" -> "dev2"
-		// or "backend.tfvars" -> "" (generic backend)
-		envName := extractEnvFromBackendFile(info.Name())
-
-		backendFile := BackendVarFile{
-			Name:     info.Name(),
-			Path:     relPath,
-			FullPath: path,
-			EnvName:  envName,
-		}
-
-		backendFiles = append(backendFiles, backendFile)
-		return nil
-	})
-
+	envPattern, err := compileEnvPattern(layout.BackendEnvPattern)
 	if err != nil {
 		return nil, err
 	}
 
+	for _, rel := range globFiles(projectPath, layout.BackendConfigs) {
+		name := path.Base(rel)
+		relDir := filepath.FromSlash(path.Dir(rel))
+		backendFiles = append(backendFiles, BackendVarFile{
+			Name:     name,
+			Path:     relDir,
+			FullPath: filepath.Join(projectPath, filepath.FromSlash(rel)),
+			EnvName:  extractBackendEnv(name, envPattern),
+		})
+	}
 	return backendFiles, nil
 }
 
-// extractEnvFromBackendFile extracts the environment name from a backend filename.
+// extractBackendEnv extracts the environment name from a backend config
+// filename. With no custom pattern it follows the "backend_<env>" convention.
 // Examples:
 //   - "backend_dev2.tfvars" -> "dev2"
-//   - "backend_int.tfvars" -> "int"
+//   - "dev.hcl" -> "dev"
 //   - "backend.tfvars" -> "" (generic, applies to all)
+func extractBackendEnv(filename string, re *regexp.Regexp) string {
+	if re != nil {
+		return envName(filename, re)
+	}
+	return extractEnvFromBackendFile(filename)
+}
+
+// extractEnvFromBackendFile is the default backend naming convention.
 func extractEnvFromBackendFile(filename string) string {
-	// Remove .tfvars extension
-	name := strings.TrimSuffix(filename, ".tfvars")
+	name := stripVarExt(filename)
 
 	// Remove "backend_" prefix if present
 	if strings.HasPrefix(name, "backend_") {

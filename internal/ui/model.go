@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Nicolas-Rigaudy/lazytf/internal/aws"
+	"github.com/Nicolas-Rigaudy/lazytf/internal/config"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/terraform"
 	tea "github.com/charmbracelet/bubbletea"
@@ -50,6 +51,7 @@ type Model struct {
 	backendVarFiles         []terraform.BackendVarFile
 	selectedBackendFile     *terraform.BackendVarFile
 	backendState            terraform.BackendState
+	baseLayout              config.Layout       // global layout; a project's .lazytf.yml overrides it
 	modal                   Modal               // Modal component
 	lastCommandMsg          tea.Msg             // Last terraform command message (for retry after AWS login)
 	pendingTerraformCommand func() tea.Msg      // Command to run after AWS login completes (set by detectCommonErrors)
@@ -58,7 +60,27 @@ type Model struct {
 	notice                  string              // One-off status bar note (e.g. startup cleanup), cleared on the next run
 }
 
-func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
+// loadProjectFiles discovers a project's var files and backend configs under
+// its layout (the global one plus the project's .lazytf.yml). A layout that
+// cannot be read gives no files and a note for the status bar.
+func loadProjectFiles(path string, base config.Layout) ([]terraform.VarFile, []terraform.BackendVarFile, string) {
+	layout, err := config.LoadLayout(path, base)
+	if err != nil {
+		return nil, nil, "✗ " + config.ProjectFileName + ": " + err.Error()
+	}
+	varFiles, err := terraform.DiscoverVarFiles(path, layout)
+	if err != nil {
+		return nil, nil, "✗ layout: " + err.Error()
+	}
+	backends, err := terraform.DiscoverBackendVarFiles(path, layout)
+	if err != nil {
+		return nil, nil, "✗ layout: " + err.Error()
+	}
+	return varFiles, backends, ""
+}
+
+func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.Layout) Model {
+	var notice string
 	var sidebar SidebarModel
 	var viewMode ViewMode
 	var selectedProject *terraform.Project
@@ -73,9 +95,8 @@ func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
 		selectedProject = &projects[0]
 
 		// Discover var files and backends for the project
-		varFiles, _ = terraform.DiscoverVarFiles(selectedProject.Path)
+		varFiles, backendVarFiles, notice = loadProjectFiles(selectedProject.Path, layout)
 		sidebarItems := terraform.GetVarFileDisplayNames(varFiles)
-		backendVarFiles, _ = terraform.DiscoverBackendVarFiles(selectedProject.Path)
 
 		// Detect current backend initialization state
 		backendState = terraform.DetectCurrentBackend(selectedProject.Path, backendVarFiles)
@@ -125,6 +146,8 @@ func NewModel(projects []terraform.Project, mode terraform.Mode) Model {
 		backendVarFiles:     backendVarFiles,
 		selectedBackendFile: nil,
 		backendState:        backendState,
+		baseLayout:          layout,
+		notice:              notice,
 		modal:               modal,
 	}
 
@@ -548,9 +571,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedProject = selectedProject
 
 		// Discover var files and backends for the selected project
-		m.varFiles, _ = terraform.DiscoverVarFiles(selectedProject.Path)
+		m.varFiles, m.backendVarFiles, m.notice = loadProjectFiles(selectedProject.Path, m.baseLayout)
 		sidebarItems := terraform.GetVarFileDisplayNames(m.varFiles)
-		m.backendVarFiles, _ = terraform.DiscoverBackendVarFiles(selectedProject.Path)
 
 		// Detect current backend initialization state
 		m.backendState = terraform.DetectCurrentBackend(selectedProject.Path, m.backendVarFiles)
