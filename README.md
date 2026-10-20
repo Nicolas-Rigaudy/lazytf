@@ -19,7 +19,7 @@ terraform init -backend-config=variables/backend/local/backend_dev.tfvars -recon
 terraform plan -var-file=variables/dev.tfvars -out=dev.tfplan
 terraform apply dev.tfplan
 
-# With LazyTF
+# With LazyTF (auth provider aws-sso)
 L → select session → browser opens
 i → select env → select backend → confirm
 p → streams plan output
@@ -36,8 +36,8 @@ a → uses saved plan → confirm with y
 - **Plan summary view** — structured, navigable diff grouped by module (toggle with `v`)
 - **Apply from saved plan** — detects existing plan files and shows their age before applying
 - **Destroy with safety gate** — confirmation modal before streaming destroy output
-- **AWS SSO login** — auto-discovers sessions from `~/.aws/config`, opens browser automatically
-- **Smart credential detection** — detects AWS auth errors and prompts to login mid-command
+- **Optional login** — AWS SSO (sessions found in `~/.aws/config`), `gcloud`, `az` or your own command; see [Login](#login-optional)
+- **Smart credential detection** — recognises expired-credential errors for the configured provider and prompts to log in mid-command
 - **Command retry** — re-runs the last command automatically after a successful login
 - **Collapsible sidebar** — more space for output when you need it (`b` to toggle)
 - **Catppuccin theme** — easy on the eyes
@@ -75,7 +75,7 @@ sudo mv lazytf /usr/local/bin/
 ### Requirements
 
 - Terraform installed and on `$PATH`
-- AWS CLI (optional, for SSO login)
+- A login CLI such as `aws`, `gcloud` or `az` only if you configure that provider
 - Go 1.25+ (only for building from source)
 
 ---
@@ -162,6 +162,31 @@ env_pattern: '^vars-(.+)$'
 terraform: tofu
 ```
 
+### Login (optional)
+
+LazyTF does nothing about credentials unless you name an auth provider, and then it only does two things: `L` runs the login command, and when a command fails with that provider's expired-credentials error it offers to log in and re-runs the failed command afterwards. Set it in `~/.config/lazytf/config.yml` or per repo in `.lazytf.yml`:
+
+```yaml
+auth:
+  provider: aws-sso   # or gcloud, az, custom
+```
+
+| Provider | Login command | Recognised errors (examples) |
+|----------|---------------|------------------------------|
+| `aws-sso` | `aws sso login --sso-session <name>`, session picked from `~/.aws/config` | `No valid credential sources found`, `Unable to locate credentials`, `ExpiredToken` |
+| `gcloud` | `gcloud auth application-default login` | `could not find default credentials`, `Reauthentication required` |
+| `az` | `az login` | `Please run 'az login'`, `AADSTS70043` |
+| `custom` | your `login` list | your `error_patterns` |
+
+```yaml
+auth:
+  provider: custom
+  login: ["my-sso-tool", "login", "--browser"]
+  error_patterns: ["session expired"]   # matched without regard to case; also extends the presets
+```
+
+`login` overrides a preset's command too. Upgrading from 0.1: the AWS SSO login used to be on by default; add the `aws-sso` provider above to keep it.
+
 ### Key Bindings
 
 | Key | Action |
@@ -170,7 +195,7 @@ terraform: tofu
 | `p` | Run `terraform plan` |
 | `a` | Apply (uses saved plan if available) |
 | `d` | Destroy (with confirmation gate) |
-| `L` | AWS SSO login |
+| `L` | Log in with the configured auth provider (hidden when none is set) |
 | `v` | Toggle plan summary / raw output |
 | `b` | Collapse / expand sidebar |
 | `j/k` or `↑/↓` | Navigate list |
@@ -204,6 +229,7 @@ lazytf/
 ├── internal/
 │   ├── config/         # Config loading (YAML, XDG-compliant)
 │   ├── executor/       # Generic streaming command executor
+│   ├── auth/           # Login providers: aws-sso, gcloud, az, custom
 │   ├── aws/            # AWS SSO session discovery and login
 │   ├── terraform/      # Command builders: init, plan, apply, destroy
 │   └── ui/             # Bubble Tea components: model, sidebar, panels, modals
