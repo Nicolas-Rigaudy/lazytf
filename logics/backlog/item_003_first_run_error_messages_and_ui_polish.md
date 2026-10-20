@@ -1,10 +1,10 @@
 ## item_003_first_run_error_messages_and_ui_polish - First run, error messages and UI polish
 > From version: 0.1.0
 > Schema version: 1.0
-> Status: Ready
+> Status: In progress
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 0%
+> Progress: 50%
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
@@ -59,3 +59,6 @@
 
 # Notes
 - Roadmap milestone: 0.4 - User-facing polish (`road_001_lazytf_to_1_0`).
+
+# Tasks
+- `task_004_first_run_error_messages_and_ui_polish`
