@@ -27,6 +27,7 @@ type InitBackendSelectedMsg struct {
 
 type RunInitMsg struct {
 	ProjectPath string
+	EnvName     string
 	Options     terraform.InitOptions
 }
 

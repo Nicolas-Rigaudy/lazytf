@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,7 +77,7 @@ func loadProjectFiles(path string, base config.Layout) ([]terraform.VarFile, []t
 	if err != nil {
 		return nil, nil, "✗ layout: " + err.Error()
 	}
-	return varFiles, backends, ""
+	return terraform.WithDefaultEnv(varFiles), backends, ""
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.Layout) Model {
@@ -308,7 +309,7 @@ func (m Model) View() string {
 				return "No Env"
 			}
 		}(),
-		IsInitialized:   m.backendState.IsInitialized && m.selectedVarFile != nil && m.backendState.DetectedEnv == m.selectedVarFile.EnvName,
+		IsInitialized:   m.selectedVarFile != nil && m.backendState.EnvReady(m.selectedVarFile.EnvName),
 		LastCommand:     "",
 		LastCommandTime: time.Time{},
 	})
@@ -381,7 +382,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Trigger Terraform Plan
 			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil && m.selectedVarFile != nil {
 				// Check if the environment is initialized first
-				if !m.backendState.IsInitialized || m.backendState.DetectedEnv != m.selectedVarFile.EnvName {
+				if !m.backendState.EnvReady(m.selectedVarFile.EnvName) {
 					m.modal.Show(ModalState{
 						Type:      ModalError,
 						Title:     "❌ Environment Not Initialized",
@@ -404,7 +405,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Trigger Terraform Apply
 			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil && m.selectedVarFile != nil {
 				// Check if the environment is initialized first
-				if !m.backendState.IsInitialized || m.backendState.DetectedEnv != m.selectedVarFile.EnvName {
+				if !m.backendState.EnvReady(m.selectedVarFile.EnvName) {
 					m.modal.Show(ModalState{
 						Type:      ModalError,
 						Title:     "❌ Environment Not Initialized",
@@ -455,7 +456,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Trigger Terraform Destroy
 			if m.viewMode == ViewModeProjectDetail && m.selectedProject != nil && m.selectedVarFile != nil {
 				// Check if the environment is initialized first
-				if !m.backendState.IsInitialized || m.backendState.DetectedEnv != m.selectedVarFile.EnvName {
+				if !m.backendState.EnvReady(m.selectedVarFile.EnvName) {
 					m.modal.Show(ModalState{
 						Type:      ModalError,
 						Title:     "❌ Environment Not Initialized",
@@ -594,8 +595,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"--- Backend Status ---\n" +
 			backendStateInfo + "\n" +
 			"--- Available Environments ---\n" +
-			"Var Files: " + string(rune(len(m.varFiles)+'0')) + "\n" +
-			"Backend Configs: " + string(rune(len(m.backendVarFiles)+'0'))
+			"Var Files: " + strconv.Itoa(len(m.varFiles)) + "\n" +
+			"Backend Configs: " + strconv.Itoa(len(m.backendVarFiles))
 		m.mainPanel.SetContent(content)
 
 		// Update status bar
@@ -609,7 +610,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedVarFile = selectedVarFile
 
 		// Determine initialization status for this environment
-		isThisEnvInitialized := m.backendState.IsInitialized && m.backendState.DetectedEnv == selectedVarFile.EnvName
+		isThisEnvInitialized := m.backendState.EnvReady(selectedVarFile.EnvName)
 
 		// If not initialized, show modal asking if they want to init
 		if !isThisEnvInitialized {
@@ -639,12 +640,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedVarFile, m.sidebar.SelectedIndex = terraform.FindVarFileByEnvName(msg.EnvName, m.varFiles)
 		switch len(msg.Backends) {
 		case 0:
+			if len(m.backendVarFiles) == 0 {
+				// The project has no backend config files: init as it is
+				// (local state, or a backend written in the .tf files).
+				m.modal.Show(ModalState{
+					Type:         ModalConfirm,
+					Title:        "Confirm Terraform Init",
+					Message:      "Initialize project " + m.selectedProject.Name + " for environment " + msg.EnvName + "?\n\nNo backend config file found; init runs without -backend-config.",
+					ConfirmLabel: "Initialize",
+					CancelLabel:  "Cancel",
+					OnConfirm: func() tea.Msg {
+						return RunInitMsg{
+							ProjectPath: m.selectedProject.Path,
+							EnvName:     msg.EnvName,
+							Options: terraform.InitOptions{
+								Reconfigure: true,
+								Upgrade:     true,
+							},
+						}
+					},
+				})
+				return m, nil
+			}
 			m.modal.Show(ModalState{
 				Type:    ModalError,
 				Title:   "❌ No Backend Config Found",
 				Message: "No backend configuration found for environment: " + msg.EnvName,
-				ErrorText: "Please create a backend configuration file (e.g., backend_" + msg.EnvName + ".tfvars) " +
-					"to initialize this environment.",
+				ErrorText: "Backend config files exist, but none matches this environment. Name one after it " +
+					"(e.g., backend_" + msg.EnvName + ".tfvars) or set backend_configs / backend_env_pattern in " + config.ProjectFileName + ".",
 			})
 			return m, nil
 		case 1:
@@ -657,6 +680,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				OnConfirm: func() tea.Msg {
 					return RunInitMsg{
 						ProjectPath: m.selectedProject.Path,
+						EnvName:     msg.EnvName,
 						Options: terraform.InitOptions{
 							BackendConfigFile: msg.Backends[0],
 							Reconfigure:       true,
@@ -698,6 +722,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			OnConfirm: func() tea.Msg {
 				return RunInitMsg{
 					ProjectPath: m.selectedProject.Path,
+					EnvName:     msg.EnvName,
 					Options: terraform.InitOptions{
 						BackendConfigFile: msg.Backend,
 						Reconfigure:       true,
@@ -887,6 +912,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.interactiveCmd.StdinWriter.Close()
 			}
 			m.interactiveCmd = nil
+		}
+
+		// A finished init binds the project to the env it was run for.
+		if initMsg, ok := m.lastCommandMsg.(RunInitMsg); ok {
+			if err := terraform.RecordInit(initMsg.ProjectPath, initMsg.EnvName, initMsg.Options.BackendConfigFile); err != nil {
+				m.notice = "✗ could not record the init: " + err.Error()
+			}
+			m.lastCommandMsg = nil
 		}
 
 		// Refresh backend state to update sidebar indicators (only if we have a project)
