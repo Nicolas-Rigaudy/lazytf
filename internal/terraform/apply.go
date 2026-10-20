@@ -5,8 +5,6 @@ import (
 	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 )
 
 // InteractiveResult contains both the tea.Cmd and stdin writer for commands that need user confirmation
@@ -39,9 +37,9 @@ func buildApplyArgs(varFile VarFile, planFile string) ([]string, bool) {
 
 // RunApply executes `terraform apply -var-file=...` (imperative shell).
 // Returns both the command and a stdin writer to send "yes" confirmation later
-func RunApply(bin, projectPath string, varFile VarFile, planFile string) InteractiveResult {
+func RunApply(tool Tool, projectPath string, varFile VarFile, planFile string) InteractiveResult {
 	args, withStdin := buildApplyArgs(varFile, planFile)
-	result := executor.ExecuteStreaming(Binary(bin), args, projectPath, withStdin)
+	result := tool.stream(args, projectPath, withStdin)
 	return InteractiveResult{
 		Cmd:         result.Cmd,
 		StdinWriter: result.StdinWriter,

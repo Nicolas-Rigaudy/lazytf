@@ -56,6 +56,23 @@ func TestResolveLoginCommands(t *testing.T) {
 	}
 }
 
+func TestEnvFor(t *testing.T) {
+	p, _ := Resolve(Config{Provider: AWSSSO, Env: map[string]map[string]string{
+		"dev":  {"AWS_PROFILE": "dev-profile", "AWS_REGION": "eu-west-1"},
+		"prod": {"AWS_PROFILE": "prod-profile"},
+	}})
+	if got, want := p.EnvFor("dev"), []string{"AWS_PROFILE=dev-profile", "AWS_REGION=eu-west-1"}; !slices.Equal(got, want) {
+		t.Errorf("EnvFor(dev) = %v, want %v", got, want)
+	}
+	if got := p.EnvFor("qa"); len(got) != 0 {
+		t.Errorf("EnvFor(qa) = %v, want none", got)
+	}
+	var none *Provider
+	if got := none.EnvFor("dev"); len(got) != 0 {
+		t.Errorf("nil provider EnvFor = %v, want none", got)
+	}
+}
+
 func TestPresetsAreNotShared(t *testing.T) {
 	a, _ := Resolve(Config{Provider: GCloud, ErrorPatterns: []string{"extra"}})
 	b, _ := Resolve(Config{Provider: GCloud})

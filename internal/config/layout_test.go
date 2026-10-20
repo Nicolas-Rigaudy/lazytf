@@ -121,3 +121,16 @@ func TestGlobalConfigCarriesLayoutKeys(t *testing.T) {
 		t.Errorf("BackendConfigs = %v, want the default", cfg.BackendConfigs)
 	}
 }
+
+func TestLoadLayoutDoesNotShareAuthEnv(t *testing.T) {
+	base := DefaultLayout()
+	base.Auth.Env = map[string]map[string]string{"dev": {"AWS_PROFILE": "a"}}
+	got, err := LoadLayout(t.TempDir(), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Auth.Env["dev"]["AWS_PROFILE"] = "mutated"
+	if base.Auth.Env["dev"]["AWS_PROFILE"] != "a" {
+		t.Error("mutating a loaded layout changed the base auth env")
+	}
+}

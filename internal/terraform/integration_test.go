@@ -77,19 +77,19 @@ func TestIntegrationInitPlanApply(t *testing.T) {
 		t.Fatalf("dev backend config not matched: %+v", backends)
 	}
 
-	mustRun(t, "init", RunInit("", dir, InitOptions{BackendConfigFile: devBackends[0]}))
+	mustRun(t, "init", RunInit(Tool{}, dir, InitOptions{BackendConfigFile: devBackends[0]}))
 	state := DetectCurrentBackend(dir, backends)
 	if state.BackendType != "local" || state.DetectedEnv != "dev" {
 		t.Fatalf("after init: backend %q env %q, want local / dev", state.BackendType, state.DetectedEnv)
 	}
 
 	// AC3: a missing required variable fails at once with Terraform's error.
-	out, ok := run(t, "plan without var file", RunPlan("", dir, VarFile{}), 30*time.Second)
+	out, ok := run(t, "plan without var file", RunPlan(Tool{}, dir, VarFile{}), 30*time.Second)
 	if ok || !strings.Contains(out, `"name" is not set`) {
 		t.Fatalf("plan without var file: ok=%v, want a failure naming the variable; output:\n%s", ok, out)
 	}
 
-	mustRun(t, "plan", RunPlan("", dir, *dev))
+	mustRun(t, "plan", RunPlan(Tool{}, dir, *dev))
 	planFile := PlanFilePath(dir, "dev")
 	if _, err := os.Stat(planFile); err != nil {
 		t.Fatalf("saved plan missing: %v", err)
@@ -99,7 +99,7 @@ func TestIntegrationInitPlanApply(t *testing.T) {
 		t.Fatalf("prod plan path exists after planning dev (err=%v)", err)
 	}
 
-	planJSON, err := RunShowPlanJSON("", dir, planFile)
+	planJSON, err := RunShowPlanJSON(Tool{}, dir, planFile)
 	if err != nil {
 		t.Fatalf("terraform show -json: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestIntegrationInitPlanApply(t *testing.T) {
 		t.Fatalf("plan changes = %+v, want one create of null_resource.x", plan.ResourceChanges)
 	}
 
-	apply := RunApply("", dir, *dev, planFile)
+	apply := RunApply(Tool{}, dir, *dev, planFile)
 	mustRun(t, "apply saved plan", apply.Cmd)
 	if _, err := os.Stat(filepath.Join(dir, "states", "dev", "terraform.tfstate")); err != nil {
 		t.Fatalf("state not written to the dev backend path: %v", err)
@@ -120,7 +120,7 @@ func TestIntegrationInitPlanApply(t *testing.T) {
 
 	// Destroy confirms over stdin, as the UI does; -input=false must not
 	// stop the approval prompt from reading it.
-	destroy := RunDestroy("", dir, *dev)
+	destroy := RunDestroy(Tool{}, dir, *dev)
 	if _, err := io.WriteString(destroy.StdinWriter, "yes\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestIntegrationNoVarFilesLocalBackend(t *testing.T) {
 	}
 	backends, _ := DiscoverBackendVarFiles(dir, layout)
 
-	mustRun(t, "init", RunInit("", dir, InitOptions{}))
+	mustRun(t, "init", RunInit(Tool{}, dir, InitOptions{}))
 	if err := RecordInit(dir, env.EnvName, BackendVarFile{}); err != nil {
 		t.Fatal(err)
 	}
@@ -163,12 +163,12 @@ func TestIntegrationNoVarFilesLocalBackend(t *testing.T) {
 		t.Fatalf("after init: state %+v is not ready for %q", state, env.EnvName)
 	}
 
-	mustRun(t, "plan", RunPlan("", dir, env))
+	mustRun(t, "plan", RunPlan(Tool{}, dir, env))
 	planFile := PlanFilePath(dir, env.EnvName)
 	if _, err := os.Stat(planFile); err != nil {
 		t.Fatalf("saved plan missing: %v", err)
 	}
-	apply := RunApply("", dir, env, planFile)
+	apply := RunApply(Tool{}, dir, env, planFile)
 	mustRun(t, "apply saved plan", apply.Cmd)
 	if _, err := os.Stat(filepath.Join(dir, "terraform.tfstate")); err != nil {
 		t.Fatalf("local state not written: %v", err)

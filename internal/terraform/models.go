@@ -2,6 +2,8 @@
 // and interacting with Terraform projects and workspaces.
 package terraform
 
+import "github.com/Nicolas-Rigaudy/lazytf/internal/executor"
+
 // Project represents a Terraform project directory.
 type Project struct {
 	Name             string
@@ -52,6 +54,17 @@ func Binary(configured string) string {
 		return "terraform"
 	}
 	return configured
+}
+
+// Tool is how to run Terraform for one environment: the executable and extra
+// environment variables ("KEY=value"), such as a cloud profile.
+type Tool struct {
+	Bin string
+	Env []string
+}
+
+func (t Tool) stream(args []string, workingDir string, withStdin bool) executor.ExecuteResult {
+	return executor.ExecuteStreamingEnv(Binary(t.Bin), args, workingDir, withStdin, t.Env)
 }
 
 // NoVarFileEnv is the name of the stand-in environment of a project with no

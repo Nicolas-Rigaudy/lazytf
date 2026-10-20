@@ -112,3 +112,13 @@ func TestExecuteStreamingStdin(t *testing.T) {
 		t.Errorf("final = %#v, want CommandCompletedMsg", final)
 	}
 }
+
+func TestExecuteStreamingEnvAddsVariables(t *testing.T) {
+	requireSh(t)
+	t.Setenv("LAZYTF_KEPT", "inherited")
+	res := ExecuteStreamingEnv("sh", []string{"-c", `echo "$LAZYTF_PROFILE $LAZYTF_KEPT"`}, t.TempDir(), false, []string{"LAZYTF_PROFILE=dev"})
+	stdout, _, _ := drain(t, res.Cmd)
+	if !slices.Equal(stdout, []string{"dev inherited"}) {
+		t.Errorf("stdout %v, want the added variable and the inherited one", stdout)
+	}
+}

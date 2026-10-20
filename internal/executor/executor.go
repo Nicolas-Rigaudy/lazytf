@@ -3,6 +3,7 @@ package executor
 import (
 	"bufio"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -22,8 +23,17 @@ type ExecuteResult struct {
 // workingDir: directory to run the command in (empty string for current dir)
 // withStdin: if true, returns a stdin writer for sending input to the command
 func ExecuteStreaming(commandName string, args []string, workingDir string, withStdin bool) ExecuteResult {
+	return ExecuteStreamingEnv(commandName, args, workingDir, withStdin, nil)
+}
+
+// ExecuteStreamingEnv is ExecuteStreaming with extra environment variables
+// ("KEY=value") added to LazyTF's own environment.
+func ExecuteStreamingEnv(commandName string, args []string, workingDir string, withStdin bool, env []string) ExecuteResult {
 	// Create the command
 	cmd := exec.Command(commandName, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	if workingDir != "" {
 		cmd.Dir = workingDir
 	}

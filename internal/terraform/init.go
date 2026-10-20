@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 )
 
 type InitOptions struct {
@@ -39,8 +37,8 @@ func buildInitArgs(options InitOptions) []string {
 }
 
 // RunInit is the imperative shell: builds args, then executes.
-func RunInit(bin, projectPath string, options InitOptions) tea.Cmd {
+func RunInit(tool Tool, projectPath string, options InitOptions) tea.Cmd {
 	args := buildInitArgs(options)
-	result := executor.ExecuteStreaming(Binary(bin), args, projectPath, false)
+	result := tool.stream(args, projectPath, false)
 	return result.Cmd
 }

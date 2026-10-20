@@ -8,8 +8,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
 )
 
 // buildPlanArgs is the functional core: pure arg-building, no side effects.
@@ -29,13 +27,13 @@ func buildPlanArgs(varFile VarFile, planFile string) []string {
 }
 
 // RunPlan is the imperative shell: builds args, then executes.
-func RunPlan(bin, projectPath string, varFile VarFile) tea.Cmd {
+func RunPlan(tool Tool, projectPath string, varFile VarFile) tea.Cmd {
 	planFile := PlanFilePath(projectPath, varFile.EnvName)
 	// Plans can embed sensitive values: keep the directory private.
 	// A mkdir failure surfaces as Terraform's own -out error.
 	_ = os.MkdirAll(filepath.Dir(planFile), 0o700)
 	args := buildPlanArgs(varFile, planFile)
-	result := executor.ExecuteStreaming(Binary(bin), args, projectPath, false)
+	result := tool.stream(args, projectPath, false)
 	return result.Cmd
 }
 

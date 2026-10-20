@@ -2,6 +2,7 @@ package ui
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -118,3 +119,20 @@ func TestLoadProjectResolvesAuthAndBinary(t *testing.T) {
 func writeFile(path, content string) error { return os.WriteFile(path, []byte(content), 0o644) }
 
 func defaultLayoutForTest() config.Layout { return config.DefaultLayout() }
+
+func TestToolCarriesPerEnvVariables(t *testing.T) {
+	m := Model{terraformBin: "tofu", authProvider: providerFor(t, auth.Config{
+		Provider: auth.AWSSSO,
+		Env:      map[string]map[string]string{"dev": {"AWS_PROFILE": "dev-profile"}},
+	})}
+	if got := m.tool("dev"); got.Bin != "tofu" || !slices.Equal(got.Env, []string{"AWS_PROFILE=dev-profile"}) {
+		t.Errorf("tool(dev) = %+v", got)
+	}
+	if got := m.tool("prod"); len(got.Env) != 0 {
+		t.Errorf("tool(prod) = %+v, want no variables", got)
+	}
+	var bare Model
+	if got := bare.tool("dev"); got.Bin != "" || len(got.Env) != 0 {
+		t.Errorf("tool with no auth = %+v, want zero", got)
+	}
+}

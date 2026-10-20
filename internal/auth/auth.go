@@ -7,6 +7,7 @@ package auth
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -28,6 +29,10 @@ type Config struct {
 	// ErrorPatterns are extra substrings of Terraform output (matched without
 	// regard to case) that mean the user must log in.
 	ErrorPatterns []string `yaml:"error_patterns,omitempty"`
+	// Env sets environment variables per environment name, for every
+	// command LazyTF runs for that environment (terraform and login), for
+	// example an AWS profile per environment.
+	Env map[string]map[string]string `yaml:"env,omitempty"`
 }
 
 // Provider is a resolved auth provider.
@@ -39,6 +44,7 @@ type Provider struct {
 	// an SSO session from ~/.aws/config first.
 	Login         []string
 	ErrorPatterns []string
+	Env           map[string]map[string]string
 }
 
 var presets = map[string]Provider{
@@ -102,7 +108,27 @@ func Resolve(c Config) (*Provider, error) {
 		p.Login = append([]string{}, c.Login...)
 	}
 	p.ErrorPatterns = append(p.ErrorPatterns, c.ErrorPatterns...)
+	p.Env = c.Env
 	return &p, nil
+}
+
+// EnvFor returns the "KEY=value" variables to add when running commands for
+// the named environment, sorted by key. A nil provider has none.
+func (p *Provider) EnvFor(envName string) []string {
+	if p == nil {
+		return nil
+	}
+	vars := p.Env[envName]
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+"="+vars[k])
+	}
+	return out
 }
 
 // NeedsLogin reports whether Terraform output looks like missing or expired

@@ -2,6 +2,7 @@ package terraform
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
 )
 
@@ -31,8 +32,11 @@ func ParsePlanJSON(jsonData []byte) (*PlanSummary, error) {
 	return &plan, nil
 }
 
-func RunShowPlanJSON(bin, projectPath string, planFilePath string) ([]byte, error) {
-	cmd := exec.Command(Binary(bin), "show", "-json", planFilePath)
+func RunShowPlanJSON(tool Tool, projectPath string, planFilePath string) ([]byte, error) {
+	cmd := exec.Command(Binary(tool.Bin), "show", "-json", planFilePath)
+	if len(tool.Env) > 0 {
+		cmd.Env = append(os.Environ(), tool.Env...)
+	}
 	cmd.Dir = projectPath
 	return cmd.Output()
 }

@@ -210,6 +210,19 @@ func (m *Model) SetNotice(text string) {
 	m.statusBar.SetText(m.buildStatusText())
 }
 
+// tool is how to run terraform for an environment of the selected project.
+func (m Model) tool(envName string) terraform.Tool {
+	return terraform.Tool{Bin: m.terraformBin, Env: m.authProvider.EnvFor(envName)}
+}
+
+// selectedEnvName is the environment the next command would run for, or "".
+func (m Model) selectedEnvName() string {
+	if m.selectedVarFile != nil {
+		return m.selectedVarFile.EnvName
+	}
+	return ""
+}
+
 // triggerLogin starts the configured provider's login: the AWS SSO session
 // workflow, or the provider's login command. Returns a tea.Cmd to execute, or
 // nil if showing a modal.
@@ -234,7 +247,7 @@ func (m *Model) runLoginCommand(argv []string) tea.Cmd {
 		return nil
 	}
 	m.prepareCommandExecution()
-	return executor.ExecuteStreaming(argv[0], argv[1:], "", false).Cmd
+	return executor.ExecuteStreamingEnv(argv[0], argv[1:], "", false, m.authProvider.EnvFor(m.selectedEnvName())).Cmd
 }
 
 // triggerAWSLogin initiates the AWS SSO login workflow
@@ -798,7 +811,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store this command in case we need to retry after login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
-		cmd := terraform.RunInit(m.terraformBin, msg.ProjectPath, msg.Options)
+		cmd := terraform.RunInit(m.tool(msg.EnvName), msg.ProjectPath, msg.Options)
 		return m, cmd
 
 	case ApplyConfirmedMsg:
@@ -868,7 +881,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store this command in case we need to retry after login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
-		cmd := terraform.RunPlan(m.terraformBin, msg.ProjectPath, msg.VarFile)
+		cmd := terraform.RunPlan(m.tool(msg.VarFile.EnvName), msg.ProjectPath, msg.VarFile)
 		return m, cmd
 
 	case RunApplyMsg:
@@ -877,7 +890,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prepareCommandExecution()
 
 		// Run terraform apply (without auto-approve) - returns stdin writer
-		result := terraform.RunApply(m.terraformBin, msg.ProjectPath, msg.VarFile, msg.PlanFile)
+		result := terraform.RunApply(m.tool(msg.VarFile.EnvName), msg.ProjectPath, msg.VarFile, msg.PlanFile)
 
 		if msg.PlanFile != "" {
 			m.mainPanel.Title = "⏳ Applying saved plan..."
@@ -900,7 +913,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prepareCommandExecution()
 
 		// Run terraform destroy (without auto-approve) - returns stdin writer
-		result := terraform.RunDestroy(m.terraformBin, msg.ProjectPath, msg.VarFile)
+		result := terraform.RunDestroy(m.tool(msg.VarFile.EnvName), msg.ProjectPath, msg.VarFile)
 
 		m.mainPanel.Title = "⏳ Destroying..."
 		// Store the interactive command state
@@ -998,7 +1011,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if planMsg, ok := m.lastCommandMsg.(RunPlanMsg); ok {
 			planFile := terraform.PlanFilePath(planMsg.ProjectPath, planMsg.VarFile.EnvName)
-			planJSON, err := terraform.RunShowPlanJSON(m.terraformBin, planMsg.ProjectPath, planFile)
+			planJSON, err := terraform.RunShowPlanJSON(m.tool(planMsg.VarFile.EnvName), planMsg.ProjectPath, planFile)
 			if err != nil {
 				m.mainPanel.Title = "❌ Failed to parse plan"
 				m.mainPanel.HasError = true

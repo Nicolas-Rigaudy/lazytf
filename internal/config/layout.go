@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -61,6 +62,13 @@ func (l Layout) clone() Layout {
 	l.Include = cloneStrings(l.Include)
 	l.Auth.Login = cloneStrings(l.Auth.Login)
 	l.Auth.ErrorPatterns = cloneStrings(l.Auth.ErrorPatterns)
+	if l.Auth.Env != nil {
+		env := make(map[string]map[string]string, len(l.Auth.Env))
+		for name, vars := range l.Auth.Env {
+			env[name] = maps.Clone(vars)
+		}
+		l.Auth.Env = env
+	}
 	return l
 }
 
