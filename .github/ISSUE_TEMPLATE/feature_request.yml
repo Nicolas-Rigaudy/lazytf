@@ -1,0 +1,19 @@
+name: Feature request
+description: Something LazyTF should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like LazyTF to do?
+  - type: textarea
+    id: layout
+    attributes:
+      label: Your repo layout
+      description: Only if the request is about how LazyTF finds projects, environments or backends.
