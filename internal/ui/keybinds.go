@@ -11,8 +11,10 @@ type KeyBindingGroup struct {
 	KeyBindings []KeyBinding
 }
 
-func DefaultKeyBindings() []KeyBindingGroup {
-	return []KeyBindingGroup{
+// DefaultKeyBindings lists the help-modal keys; the login key is listed only
+// when an auth provider is configured.
+func DefaultKeyBindings(loginEnabled bool) []KeyBindingGroup {
+	groups := []KeyBindingGroup{
 		{
 			Title: "Global",
 			KeyBindings: []KeyBinding{
@@ -37,7 +39,6 @@ func DefaultKeyBindings() []KeyBindingGroup {
 		{
 			Title: "Terraform",
 			KeyBindings: []KeyBinding{
-				{Key: "L", Description: "Login", Enabled: true},
 				{Key: "i", Description: "Init", Enabled: true},
 				{Key: "v", Description: "Validate", Enabled: false},
 				{Key: "f", Description: "Format", Enabled: false},
@@ -47,4 +48,9 @@ func DefaultKeyBindings() []KeyBindingGroup {
 			},
 		},
 	}
+	if loginEnabled {
+		terraform := &groups[2].KeyBindings
+		*terraform = append([]KeyBinding{{Key: "L", Description: "Login", Enabled: true}}, *terraform...)
+	}
+	return groups
 }

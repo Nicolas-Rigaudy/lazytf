@@ -57,6 +57,15 @@ func TestLoadLayout(t *testing.T) {
 			},
 		},
 		{
+			name:    "auth section",
+			content: ptr("auth:\n  provider: gcloud\n  error_patterns: [\"corp expired\"]\n"),
+			check: func(t *testing.T, got Layout) {
+				if got.Auth.Provider != "gcloud" || !slices.Equal(got.Auth.ErrorPatterns, []string{"corp expired"}) {
+					t.Errorf("Auth = %+v", got.Auth)
+				}
+			},
+		},
+		{
 			name:    "invalid yaml returns the base and an error",
 			content: ptr("var_files: [unclosed\n"),
 			wantErr: true,

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Nicolas-Rigaudy/lazytf/internal/auth"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/aws"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/config"
 	"github.com/Nicolas-Rigaudy/lazytf/internal/executor"
@@ -54,36 +55,54 @@ type Model struct {
 	backendState            terraform.BackendState
 	baseLayout              config.Layout       // global layout; a project's .lazytf.yml overrides it
 	terraformBin            string              // executable of the selected project ("" = terraform)
+	authProvider            *auth.Provider      // login helper of the selected project; nil = none
 	modal                   Modal               // Modal component
-	lastCommandMsg          tea.Msg             // Last terraform command message (for retry after AWS login)
-	pendingTerraformCommand func() tea.Msg      // Command to run after AWS login completes (set by detectCommonErrors)
+	lastCommandMsg          tea.Msg             // Last terraform command message (for retry after login)
+	pendingTerraformCommand func() tea.Msg      // Command to run after login completes (set by detectCommonErrors)
 	interactiveCmd          *InteractiveCommand // Tracks state for interactive commands (apply, destroy, etc.)
 	lastFailure             string              // Status bar note for the last failed command, cleared on the next run
 	notice                  string              // One-off status bar note (e.g. startup cleanup), cleared on the next run
 }
 
-// loadProjectFiles discovers a project's var files and backend configs under
-// its layout (the global one plus the project's .lazytf.yml). A layout that
-// cannot be read gives no files and a note for the status bar. It also
-// returns the terraform executable the layout selects.
-func loadProjectFiles(path string, base config.Layout) (varFiles []terraform.VarFile, backends []terraform.BackendVarFile, bin, note string) {
+// projectSetup is what a project's layout gives the UI.
+type projectSetup struct {
+	varFiles []terraform.VarFile
+	backends []terraform.BackendVarFile
+	bin      string         // terraform executable; "" = terraform
+	auth     *auth.Provider // nil = no login helper
+	note     string         // status bar note when the layout could not be applied
+}
+
+// loadProject discovers a project's var files and backend configs under its
+// layout (the global one plus the project's .lazytf.yml). A layout that
+// cannot be read gives no files and a note for the status bar.
+func loadProject(path string, base config.Layout) projectSetup {
 	layout, err := config.LoadLayout(path, base)
 	if err != nil {
-		return nil, nil, base.Terraform, "✗ " + config.ProjectFileName + ": " + err.Error()
+		return projectSetup{bin: base.Terraform, note: "✗ " + config.ProjectFileName + ": " + err.Error()}
 	}
-	varFiles, err = terraform.DiscoverVarFiles(path, layout)
+	setup := projectSetup{bin: layout.Terraform}
+	if setup.auth, err = auth.Resolve(layout.Auth); err != nil {
+		setup.note = "✗ auth: " + err.Error()
+	}
+	varFiles, err := terraform.DiscoverVarFiles(path, layout)
 	if err != nil {
-		return nil, nil, layout.Terraform, "✗ layout: " + err.Error()
+		setup.note = "✗ layout: " + err.Error()
+		return setup
 	}
-	backends, err = terraform.DiscoverBackendVarFiles(path, layout)
+	backends, err := terraform.DiscoverBackendVarFiles(path, layout)
 	if err != nil {
-		return nil, nil, layout.Terraform, "✗ layout: " + err.Error()
+		setup.note = "✗ layout: " + err.Error()
+		return setup
 	}
-	return terraform.WithDefaultEnv(varFiles), backends, layout.Terraform, ""
+	setup.varFiles = terraform.WithDefaultEnv(varFiles)
+	setup.backends = backends
+	return setup
 }
 
 func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.Layout) Model {
 	var notice, terraformBin string
+	var authProvider *auth.Provider
 	var sidebar SidebarModel
 	var viewMode ViewMode
 	var selectedProject *terraform.Project
@@ -98,7 +117,8 @@ func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.L
 		selectedProject = &projects[0]
 
 		// Discover var files and backends for the project
-		varFiles, backendVarFiles, terraformBin, notice = loadProjectFiles(selectedProject.Path, layout)
+		setup := loadProject(selectedProject.Path, layout)
+		varFiles, backendVarFiles, terraformBin, authProvider, notice = setup.varFiles, setup.backends, setup.bin, setup.auth, setup.note
 		sidebarItems := terraform.GetVarFileDisplayNames(varFiles)
 
 		// Detect current backend initialization state
@@ -114,6 +134,11 @@ func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.L
 		selectedProject = nil
 		varFiles = nil
 		backendVarFiles = nil
+		terraformBin = layout.Terraform
+		var err error
+		if authProvider, err = auth.Resolve(layout.Auth); err != nil {
+			notice = "✗ auth: " + err.Error()
+		}
 
 		// Build sidebar with project names
 		sidebarItems := make([]string, len(projects))
@@ -151,6 +176,7 @@ func NewModel(projects []terraform.Project, mode terraform.Mode, layout config.L
 		backendState:        backendState,
 		baseLayout:          layout,
 		terraformBin:        terraformBin,
+		authProvider:        authProvider,
 		notice:              notice,
 		modal:               modal,
 	}
@@ -182,6 +208,33 @@ func (m *Model) prepareCommandExecution() {
 func (m *Model) SetNotice(text string) {
 	m.notice = text
 	m.statusBar.SetText(m.buildStatusText())
+}
+
+// triggerLogin starts the configured provider's login: the AWS SSO session
+// workflow, or the provider's login command. Returns a tea.Cmd to execute, or
+// nil if showing a modal.
+func (m *Model) triggerLogin() tea.Cmd {
+	if m.authProvider == nil {
+		m.modal.Show(ModalState{
+			Type:      ModalError,
+			Title:     "❌ No Login Configured",
+			ErrorText: "Set an auth provider (aws-sso, gcloud, az or custom) in " + config.ProjectFileName + " or ~/.config/lazytf/config.yml to log in from LazyTF.",
+		})
+		return nil
+	}
+	if !m.authProvider.UsesSSOSessions() {
+		return m.runLoginCommand(m.authProvider.Login)
+	}
+	return m.triggerAWSLogin()
+}
+
+// runLoginCommand runs a provider's login command (argv) in the output panel.
+func (m *Model) runLoginCommand(argv []string) tea.Cmd {
+	if len(argv) == 0 {
+		return nil
+	}
+	m.prepareCommandExecution()
+	return executor.ExecuteStreaming(argv[0], argv[1:], "", false).Cmd
 }
 
 // triggerAWSLogin initiates the AWS SSO login workflow
@@ -228,10 +281,9 @@ func (m *Model) triggerAWSLogin() tea.Cmd {
 func (m *Model) detectCommonErrors() bool {
 	output := m.mainPanel.Content
 
-	// Check for AWS credential errors
-	if strings.Contains(output, "No valid credential sources found") ||
-		strings.Contains(output, "Unable to locate credentials") {
-		// Set pending command to retry after AWS login
+	// Check for credential errors the auth provider recognises
+	if m.authProvider.NeedsLogin(output) {
+		// Set pending command to retry after login
 		if m.lastCommandMsg != nil {
 			m.pendingTerraformCommand = func() tea.Msg {
 				return m.lastCommandMsg
@@ -240,12 +292,12 @@ func (m *Model) detectCommonErrors() bool {
 
 		m.modal.Show(ModalState{
 			Type:         ModalConfirm,
-			Title:        "🔐 AWS Authentication Required",
-			Message:      "AWS credentials are not available or have expired.\n\nWould you like to log in now?",
+			Title:        "🔐 Authentication Required",
+			Message:      m.authProvider.Label + " credentials are not available or have expired.\n\nWould you like to log in now?",
 			ConfirmLabel: "Login",
 			CancelLabel:  "Cancel",
 			OnConfirm: func() tea.Msg {
-				return TriggerAWSLoginMsg{}
+				return TriggerLoginMsg{}
 			},
 		})
 		return true
@@ -281,7 +333,11 @@ func (m Model) buildStatusText() string {
 		if m.mode == terraform.ModeMultiProject {
 			parts = append(parts, "Backspace: back", "│")
 		}
-		parts = append(parts, "i: init", "p: plan", "a: apply", "d: destroy", "shift+l: aws login", "│")
+		parts = append(parts, "i: init", "p: plan", "a: apply", "d: destroy")
+		if m.authProvider != nil {
+			parts = append(parts, "shift+l: login")
+		}
+		parts = append(parts, "│")
 	}
 
 	// Add view toggle hint if plan summary is available
@@ -351,7 +407,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.modal.Show(ModalState{
 				Type:             ModalHelp,
-				KeyBindingGroups: DefaultKeyBindings(),
+				KeyBindingGroups: DefaultKeyBindings(m.authProvider != nil),
 			})
 			return m, nil
 		case "i":
@@ -378,8 +434,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "L":
-			// Trigger AWS SSO Login
-			return m, m.triggerAWSLogin()
+			// Trigger the configured provider's login
+			return m, m.triggerLogin()
 
 		case "p":
 			// Trigger Terraform Plan
@@ -575,7 +631,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedProject = selectedProject
 
 		// Discover var files and backends for the selected project
-		m.varFiles, m.backendVarFiles, m.terraformBin, m.notice = loadProjectFiles(selectedProject.Path, m.baseLayout)
+		setup := loadProject(selectedProject.Path, m.baseLayout)
+		m.varFiles, m.backendVarFiles, m.terraformBin, m.authProvider, m.notice = setup.varFiles, setup.backends, setup.bin, setup.auth, setup.note
 		sidebarItems := terraform.GetVarFileDisplayNames(m.varFiles)
 
 		// Detect current backend initialization state
@@ -738,7 +795,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case RunInitMsg:
-		// Store this command in case we need to retry after AWS login
+		// Store this command in case we need to retry after login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
 		cmd := terraform.RunInit(m.terraformBin, msg.ProjectPath, msg.Options)
@@ -799,23 +856,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case TriggerAWSLoginMsg:
-		// Trigger the AWS login workflow
-		return m, m.triggerAWSLogin()
+	case TriggerLoginMsg:
+		// Trigger the configured provider's login workflow
+		return m, m.triggerLogin()
 
 	case RunAWSSSOLoginMsg:
 		m.prepareCommandExecution()
 		return m, aws.RunSSOLogin(msg.Session)
 
 	case RunPlanMsg:
-		// Store this command in case we need to retry after AWS login
+		// Store this command in case we need to retry after login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
 		cmd := terraform.RunPlan(m.terraformBin, msg.ProjectPath, msg.VarFile)
 		return m, cmd
 
 	case RunApplyMsg:
-		// Store this command in case we need to retry after AWS login
+		// Store this command in case we need to retry after login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
 
@@ -838,7 +895,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, result.Cmd
 
 	case RunDestroyMsg:
-		// Store this command in case we need to retry after AWS login
+		// Store this command in case we need to retry after login
 		m.lastCommandMsg = msg
 		m.prepareCommandExecution()
 
@@ -917,8 +974,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.interactiveCmd = nil
 		}
 
-		// A finished init binds the project to the env it was run for.
-		if initMsg, ok := m.lastCommandMsg.(RunInitMsg); ok {
+		// A finished init binds the project to the env it was run for. Not
+		// when this completion is a login that precedes the init's retry.
+		if initMsg, ok := m.lastCommandMsg.(RunInitMsg); ok && m.pendingTerraformCommand == nil {
 			if err := terraform.RecordInit(initMsg.ProjectPath, initMsg.EnvName, initMsg.Options.BackendConfigFile); err != nil {
 				m.notice = "✗ could not record the init: " + err.Error()
 			}
@@ -931,7 +989,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sidebar.InitializedEnv = m.backendState.DetectedEnv
 		}
 
-		// If there's a pending terraform command (after AWS login), execute it now
+		// If there's a pending terraform command (after login), execute it now
 		if m.pendingTerraformCommand != nil {
 			cmd := m.pendingTerraformCommand
 			m.pendingTerraformCommand = nil // Clear it

@@ -51,7 +51,7 @@ type RunDestroyMsg struct {
 	VarFile     terraform.VarFile
 }
 
-type TriggerAWSLoginMsg struct{}
+type TriggerLoginMsg struct{}
 
 type ApplyConfirmedMsg struct{}
 

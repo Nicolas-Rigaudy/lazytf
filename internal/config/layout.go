@@ -5,13 +5,15 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/Nicolas-Rigaudy/lazytf/internal/auth"
 )
 
 // ProjectFileName is the per-repo layout override, read from the project root.
 const ProjectFileName = ".lazytf.yml"
 
-// Layout says where a project keeps its var files and backend configs and how
-// environment names are derived from them. It is read from the global config
+// Layout says where a project keeps its var files and backend configs, how
+// environment names are derived from them, and how to log in. It is read from the global config
 // and overridden key by key by a project's .lazytf.yml.
 //
 // Globs are relative to the project root and may use "**" to span directories.
@@ -35,6 +37,8 @@ type Layout struct {
 	// BackendEnvPattern is EnvPattern for backend config files. Empty means
 	// the "backend_<env>" convention (a bare "backend" is shared by all envs).
 	BackendEnvPattern string `yaml:"backend_env_pattern,omitempty"`
+	// Auth is the optional login helper; none unless a provider is set.
+	Auth auth.Config `yaml:"auth,omitempty"`
 }
 
 // DefaultLayout is the layout LazyTF understood before it became configurable:
@@ -55,6 +59,8 @@ func (l Layout) clone() Layout {
 	l.BackendConfigs = cloneStrings(l.BackendConfigs)
 	l.Exclude = cloneStrings(l.Exclude)
 	l.Include = cloneStrings(l.Include)
+	l.Auth.Login = cloneStrings(l.Auth.Login)
+	l.Auth.ErrorPatterns = cloneStrings(l.Auth.ErrorPatterns)
 	return l
 }
 
