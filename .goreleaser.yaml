@@ -7,16 +7,43 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
+      - darwin
     goarch:
       - amd64
       - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
 
 archives:
   - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ title .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
 
 checksum:
   name_template: "checksums.txt"
+
+# Commit subjects look like "new[GO]: ...", "fix[GO]: ...", "chg[GO]: ...".
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^new\[[A-Z]+\]'
+      order: 0
+    - title: Fixes
+      regexp: '^fix\[[A-Z]+\]'
+      order: 1
+    - title: Changes
+      regexp: '^chg\[[A-Z]+\]'
+      order: 2
+    - title: Other
+      order: 3
+  filters:
+    exclude:
+      - '^chg\[(DOCS|TEST|CI)\]'
+      - '^new\[(DOCS|CI)\]'
+      - '^fix\[CI\]'
 
 release:
   github:
