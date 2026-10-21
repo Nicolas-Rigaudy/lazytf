@@ -1,71 +1,116 @@
 # LazyTF
 
-**A terminal UI for Terraform — plan, apply, and destroy without leaving your keyboard.**
+[![CI](https://github.com/Nicolas-Rigaudy/lazytf/actions/workflows/ci.yml/badge.svg)](https://github.com/Nicolas-Rigaudy/lazytf/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Nicolas-Rigaudy/lazytf)](https://github.com/Nicolas-Rigaudy/lazytf/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-LazyTF brings lazygit-style ergonomics to Terraform workflows. Browse your environments, run commands with a single keypress, and watch real-time streaming output — all from one panel.
+**A terminal UI for Terraform: pick an environment, then init, plan, apply or destroy with one key.**
+
+LazyTF brings lazygit-style ergonomics to Terraform. It finds the projects and environments in your repo, runs Terraform with the right var file and backend config, streams the output, and turns a plan into a summary you can browse by module.
+
+<!--
+  DEMO GIF SLOT (reserved for the maintainer).
+  Replace the screenshot below with the animated demo once it is recorded, e.g.
+  ![LazyTF demo](docs/demo/demo.gif)
+-->
+![Plan summary of the sample project, grouped by module](docs/demo/5-plan-summary.png)
+
+- [Why LazyTF?](#why-lazytf)
+- [Demo](#demo)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [How it keeps you safe](#how-it-keeps-you-safe)
+- [Key bindings](#key-bindings)
+- [Compared with other Terraform UIs](#compared-with-other-terraform-uis)
+- [Contributing](#contributing)
 
 ---
 
 ## Why LazyTF?
 
-Running Terraform day-to-day means repeating the same sequence of long commands, switching between your editor and terminal, and carefully typing `yes` for every apply. It's slow and error-prone.
-
-LazyTF replaces that with a keyboard-driven TUI:
+Running Terraform day to day means retyping the same long commands for every environment, keeping track of which backend the working directory was last initialised with, and reading plans as a wall of text.
 
 ```bash
-# Before LazyTF
-aws sso login --sso-session my-session
-terraform init -backend-config=variables/backend/local/backend_dev.tfvars -reconfigure
-terraform plan -var-file=variables/dev.tfvars -out=dev.tfplan
+# Without LazyTF
+terraform init -backend-config=backends/dev.hcl -reconfigure
+terraform plan -var-file=envs/dev.tfvars -out=dev.tfplan
 terraform apply dev.tfplan
 
-# With LazyTF (auth provider aws-sso)
-L → select session → browser opens
-i → select env → select backend → confirm
-p → streams plan output
-a → uses saved plan → confirm with y
+# With LazyTF
+Enter → pick the project, then the "dev" environment
+i     → init with the matching backend config, after a confirmation
+p     → plan, streamed, then shown as a summary grouped by module
+a     → apply the saved plan
 ```
-
----
 
 ## Features
 
-- **Multi-environment navigation** — browse projects and `.tfvars` environments in a sidebar
-- **Backend auto-discovery** — finds and matches backend configs to the selected environment
-- **Streaming output** — real-time line-by-line output from every terraform command
-- **Plan summary view** — structured, navigable diff grouped by module (toggle with `v`)
-- **Apply from saved plan** — detects existing plan files and shows their age before applying
-- **Destroy with safety gate** — confirmation modal before streaming destroy output
-- **Optional login** — AWS SSO (sessions found in `~/.aws/config`), `gcloud`, `az` or your own command; see [Login](#login-optional)
-- **Smart credential detection** — recognises expired-credential errors for the configured provider and prompts to log in mid-command
-- **Command retry** — re-runs the last command automatically after a successful login
-- **Collapsible sidebar** — more space for output when you need it (`b` to toggle)
-- **Catppuccin theme** — easy on the eyes
+- **Projects and environments in a sidebar.** Every directory with `.tf` or `.tf.json` files is a project; every var file is an environment.
+- **Backend matching.** `backend_dev.tfvars` or `dev.hcl` goes with the `dev` environment, and LazyTF remembers which one the last `init` used.
+- **Streaming output** from every Terraform command.
+- **Plan summary.** A navigable diff grouped by module (toggle with `v`).
+- **Apply from the saved plan**, with its age shown and a warning if it predates the last init.
+- **Destroy behind a confirmation.**
+- **Any layout.** Var files and backend configs are found by globs you can change per repo.
+- **Terraform or OpenTofu**, or any other compatible binary.
+- **Optional login** for AWS SSO, `gcloud`, `az` or your own command, with a retry of the failed command afterwards.
+- **One static binary** for Linux and macOS. Catppuccin colours.
 
 ---
 
 ## Demo
 
-> *Screenshots / GIF coming soon*
+Recorded on the sample repo in [`docs/demo/sample`](docs/demo/sample): a project `app` with `dev` and `prod` var files, two modules and a local backend, plus a project `network` with no var file. Nothing in it talks to a cloud account.
+
+**1. Discover.** Run `lazytf` at the top of the repo: every Terraform project is listed.
+
+![Project list](docs/demo/1-discover.png)
+
+**2. Pick an environment.** Inside a project, each var file is an environment.
+
+![Environments of the app project](docs/demo/2-environments.png)
+
+**3. Init.** `i` initialises the environment with its backend config, after a confirmation.
+
+![Output of terraform init](docs/demo/4-init.png)
+
+**4. Plan and summary.** `p` streams the plan, then shows it grouped by module; `Enter` expands a module or a resource, `v` switches to the raw output.
+
+![Plan summary](docs/demo/5-plan-summary.png)
+
+**5. Apply.** `a` offers the plan you just saved, or a fresh one.
+
+![Choice between the saved plan and a fresh plan](docs/demo/6-apply-saved-plan.png)
+
+![Output of terraform apply](docs/demo/7-apply.png)
+
+The screenshots come from [`docs/demo/record.py`](docs/demo/record.py), which runs LazyTF on a copy of the sample repo and saves each screen; see [Recording the demo](#recording-the-demo).
 
 ---
 
 ## Installation
 
-### Linux (prebuilt binary)
+| Method | Command | Platforms | Status |
+|--------|---------|-----------|--------|
+| [GitHub releases](#prebuilt-binary-github-releases) | download an archive | Linux, macOS (amd64, arm64) | available |
+| [`go install`](#go-install) | `go install github.com/Nicolas-Rigaudy/lazytf/cmd/lazytf@latest` | any Go target | available |
+| [From source](#from-source) | `go build ./cmd/lazytf` | any Go target | available |
+| [AUR](#aur-arch-linux) | `yay -S lazytf-bin` | Arch Linux | coming with 1.0 |
+| [Homebrew](#homebrew) | `brew install Nicolas-Rigaudy/tap/lazytf` | macOS, Linux | coming with 1.0 |
 
-No Go toolchain needed. Downloads the latest release and installs to `/usr/local/bin`:
+### Prebuilt binary (GitHub releases)
+
+No Go toolchain needed. On Linux, download the latest release and install it to `/usr/local/bin`:
 
 ```bash
 curl -sL https://github.com/Nicolas-Rigaudy/lazytf/releases/latest/download/lazytf_Linux_amd64.tar.gz | tar xz
 sudo mv lazytf /usr/local/bin/
 ```
 
-On ARM (e.g. a Graviton box or ARM laptop), swap `amd64` for `arm64`. Or grab a binary from the [Releases page](https://github.com/Nicolas-Rigaudy/lazytf/releases).
+On a 64-bit ARM machine (a Graviton instance, a Raspberry Pi with a 64-bit OS), swap `amd64` for `arm64`. Every archive is also on the [Releases page](https://github.com/Nicolas-Rigaudy/lazytf/releases), with `checksums.txt`.
 
-### macOS (prebuilt binary)
-
-Archives for Intel (`amd64`) and Apple Silicon (`arm64`) are published from the first release after v0.1.0, named `lazytf_Darwin_amd64.tar.gz` and `lazytf_Darwin_arm64.tar.gz`. They are not code-signed, so Gatekeeper blocks the first run of a downloaded binary. Clear the quarantine flag once:
+**macOS.** Archives for Intel (`lazytf_Darwin_amd64.tar.gz`) and Apple Silicon (`lazytf_Darwin_arm64.tar.gz`) are published from the first release after v0.1.0. They are not code-signed, so Gatekeeper blocks the first run of a binary downloaded with a browser. Clear the quarantine flag once:
 
 ```bash
 tar xzf lazytf_Darwin_arm64.tar.gz
@@ -73,41 +118,52 @@ xattr -d com.apple.quarantine lazytf
 sudo mv lazytf /usr/local/bin/
 ```
 
-Downloading with `curl` (as in the Linux example) does not set the flag.
+Downloading with `curl`, as in the Linux example, does not set the flag.
 
-### With `go install`
+### `go install`
 
 ```bash
 go install github.com/Nicolas-Rigaudy/lazytf/cmd/lazytf@latest
 ```
 
-This puts `lazytf` in `$(go env GOPATH)/bin`; `lazytf --version` reports the module version.
+This puts `lazytf` in `$(go env GOPATH)/bin`. Until the next release, `@latest` is v0.1.0, which predates the layout and login settings below and the `--version` flag; `@main` installs the current code, and `lazytf --version` then reports the module version.
 
 ### From source
 
 ```bash
 git clone https://github.com/Nicolas-Rigaudy/lazytf
 cd lazytf
-go build -o lazytf cmd/lazytf/main.go
+go build -o lazytf ./cmd/lazytf
 sudo mv lazytf /usr/local/bin/
+```
+
+### AUR (Arch Linux)
+
+*Coming with 1.0.* The `lazytf-bin` package will install the release binary:
+
+```bash
+yay -S lazytf-bin
+```
+
+### Homebrew
+
+*Coming with 1.0.* The tap will serve macOS and Linux:
+
+```bash
+brew install Nicolas-Rigaudy/tap/lazytf
 ```
 
 ### Requirements
 
-- Terraform installed and on `$PATH`
-- A login CLI such as `aws`, `gcloud` or `az` only if you configure that provider
-- Go 1.25+ (only for building from source)
+- `terraform` on your `PATH`, or another compatible binary set with [`terraform:`](#project-layout)
+- The `aws`, `gcloud` or `az` CLI only if you turn on that [login provider](#login)
+- Go 1.25+ only to build from source or use `go install`
 
 ---
 
 ## Usage
 
-Run `lazytf` in or above a directory containing Terraform projects. It auto-detects whether you're inside a single project or a monorepo with multiple projects.
-
-```bash
-cd ~/infra
-lazytf
-```
+Run `lazytf` in a Terraform project, or in a directory that holds several:
 
 ```bash
 lazytf                 # the current directory: one project, or a scan for projects
@@ -117,33 +173,26 @@ lazytf --config ./lazytf.yml
 lazytf --version       # also: --help
 ```
 
-If `terraform` is not on your `PATH`, LazyTF says so and exits before drawing anything (set `terraform: tofu`, or a full path, in the config to use another binary).
+If `terraform` is not on your `PATH`, LazyTF says so and exits before drawing anything.
 
-### First run — how LazyTF finds your stuff
+### How LazyTF finds your projects
 
-You don't configure anything to start. LazyTF discovers projects and environments by convention:
+Nothing needs configuring to start. LazyTF works by convention, and every convention can be changed (see [Project layout](#project-layout)):
 
-- **Single vs. multi-project** — if the current directory holds Terraform files (or already has a `.terraform/` folder), LazyTF opens it directly, initialised or not. Otherwise it scans your search paths (by default just the current directory) and lists every project it finds in the sidebar. It never scans folders you did not name. A "project" is any directory containing `.tf` or `.tf.json` files (the JSON syntax that CDKTF and other generators write).
-- **Environments** — inside a project, each `*.tfvars` file is an environment. LazyTF looks in the project root and in `variables/`, `env/`, and `tfvars/`. `dev.tfvars` shows up as the `dev` environment. `terraform.tfvars` and `*.auto.tfvars` are not environments: Terraform loads them by itself. A project with no var files gets one environment, `(no var-file)`, so it can still be planned.
-- **Backends** — backend configs live under `variables/backend/**/*.tfvars`. A file named `backend_dev.tfvars` is auto-matched to the `dev` environment; a plain `backend.tfvars` applies to all. A project with no backend config files (local state, or a backend written in the `.tf` files) is initialised without `-backend-config`.
-- **Which environment is initialised** — LazyTF remembers the environment and backend file of its last `init` (in `~/.cache/lazytf/init/`) and checks it against the backend Terraform recorded in `.terraform/terraform.tfstate`. If you re-init by hand, it falls back to guessing from the state key.
+- **One project or many.** If the directory holds Terraform files (or a `.terraform/` folder), LazyTF opens it directly, initialised or not. Otherwise it scans the directory for projects and lists them. It never scans folders you did not name. A project is any directory with `.tf` or `.tf.json` files (the JSON syntax that CDKTF and other generators write).
+- **Environments.** Each var file is an environment: `dev.tfvars` is `dev`. By default LazyTF looks in the project root and in `variables/`, `env/` and `tfvars/`. `terraform.tfvars` and `*.auto.tfvars` are not environments, since Terraform loads them by itself. A project with no var file gets one environment, `(no var-file)`, so it can still be planned.
+- **Backend configs.** Files passed to `init` as `-backend-config`. By default they are looked for under `variables/backend/`; `backend_dev.tfvars` or `dev.tfvars` goes with `dev`, and a plain `backend.tfvars` with every environment. A project with no backend config file (local state, or a backend written in the `.tf` files) is initialised without `-backend-config`.
+- **Which environment is initialised.** LazyTF records the environment and backend file of its last `init` (in `~/.cache/lazytf/init/`) and checks them against the backend Terraform recorded in `.terraform/`. If you re-init by hand, it falls back to guessing from the state key.
 
-So a typical layout LazyTF understands out of the box:
+---
 
-```
-my-project/
-├── main.tf
-├── dev.tfvars                       # → "dev" environment
-├── prod.tfvars                      # → "prod" environment
-└── variables/
-    └── backend/
-        ├── backend_dev.tfvars       # → backend for "dev"
-        └── backend_prod.tfvars      # → backend for "prod"
-```
+## Configuration
 
-### Configuration (optional)
+Both files below are optional, and any key you leave out keeps its default.
 
-By default LazyTF searches only the current directory. To point it at your infra directories instead, create `~/.config/lazytf/config.yml`:
+### Search paths
+
+To list projects from several places, create `~/.config/lazytf/config.yml`:
 
 ```yaml
 search_paths:
@@ -156,11 +205,11 @@ ignore_patterns:
   - "*/.terraform"
 ```
 
-The file is optional — sensible defaults apply if it's absent. Any key you leave out keeps its default, so a file with only `search_paths` still uses the ignore patterns above.
+By default LazyTF searches only the current directory. A file with only `search_paths` still uses the ignore patterns above.
 
-### Layout (optional)
+### Project layout
 
-If your repo does not follow the layout above, say where things are. Put a `.lazytf.yml` in the project root, or the same keys in `~/.config/lazytf/config.yml` to set them for every project (a key in `.lazytf.yml` wins). Globs are relative to the project root; `**` spans directories.
+If your repo does not follow the defaults, say where things are. Put a `.lazytf.yml` in the project root, or the same keys in `~/.config/lazytf/config.yml` to set them for every project (a key in `.lazytf.yml` wins). Globs are relative to the project root; `**` spans directories.
 
 | Key | Meaning | Default |
 |-----|---------|---------|
@@ -169,36 +218,36 @@ If your repo does not follow the layout above, say where things are. Put a `.laz
 | `exclude` | Var files that are not environments (a glob without `/` matches the file name) | `terraform.tfvars`, `*.auto.tfvars` |
 | `include` | Var files to list even when `exclude` matches | none |
 | `env_pattern` | Regex with one capture group, applied to the var file name without extension | the whole name |
-| `backend_env_pattern` | Same, for backend config files | `backend_<env>`; a bare `backend` is shared |
+| `backend_env_pattern` | Same, for backend config files | `backend_<env>` or the whole name; a bare `backend` is shared |
 | `terraform` | Executable to run, e.g. `tofu` or a full path | `terraform` |
 
-A key you leave out keeps its default; `exclude: []` clears one. Three layouts:
+`exclude: []` clears a default list. Three common layouts:
 
 ```yaml
-# 1. GCS backend, envs/dev.tfvars + backends/dev.hcl
+# 1. envs/dev.tfvars with backends/dev.hcl (a GCS or S3 backend, say)
 var_files: ["envs/*.tfvars"]
 backend_configs: ["backends/*.hcl"]
 ```
 
 ```yaml
-# 2. Local backend, one var file per environment: nothing to configure.
-#    (No backend config files means init runs without -backend-config.)
+# 2. A local backend and one var file per environment: nothing to configure.
+#    With no backend config file, init runs without -backend-config.
 ```
 
 ```yaml
-# 3. Var files named vars-<env>.tfvars next to the code, OpenTofu
+# 3. Var files named vars-<env>.tfvars next to the code, run with OpenTofu
 var_files: ["vars-*.tfvars"]
 env_pattern: '^vars-(.+)$'
 terraform: tofu
 ```
 
-### Login (optional)
+### Login
 
-LazyTF does nothing about credentials unless you name an auth provider, and then it only does two things: `L` runs the login command, and when a command fails with that provider's expired-credentials error it offers to log in and re-runs the failed command afterwards. Set it in `~/.config/lazytf/config.yml` or per repo in `.lazytf.yml`:
+LazyTF does nothing about credentials unless you name an auth provider. Then it does two things: `L` runs the login command, and when a command fails with that provider's expired-credentials error, it offers to log in and re-runs the failed command afterwards. Set it in `~/.config/lazytf/config.yml` or per repo in `.lazytf.yml`:
 
 ```yaml
 auth:
-  provider: aws-sso   # or gcloud, az, custom
+  provider: gcloud   # or aws-sso, az, custom
 ```
 
 | Provider | Login command | Recognised errors (examples) |
@@ -215,7 +264,7 @@ auth:
   error_patterns: ["session expired"]   # matched without regard to case; also extends the presets
 ```
 
-To use another account or profile per environment, set variables under `auth.env`; they are added to every terraform command and to the login command LazyTF runs for that environment:
+`login` overrides a preset's command too. To use another account or profile per environment, set variables under `auth.env`; they are added to every Terraform command and to the login command for that environment:
 
 ```yaml
 auth:
@@ -225,55 +274,54 @@ auth:
     prod: { AWS_PROFILE: prod-profile }
 ```
 
-`login` overrides a preset's command too. Upgrading from 0.1: the AWS SSO login used to be on by default; add the `aws-sso` provider above to keep it.
-
-### Key Bindings
-
-| Key | Action |
-|-----|--------|
-| `i` | Initialize selected environment |
-| `p` | Run `terraform plan` |
-| `a` | Apply (uses saved plan if available) |
-| `d` | Destroy (with confirmation gate) |
-| `L` | Log in with the configured auth provider (hidden when none is set) |
-| `v` | Toggle plan summary / raw output |
-| `b` | Collapse / expand sidebar |
-| `j/k` or `↑/↓` | Navigate list |
-| `h/l` or `←/→` | Scroll output horizontally |
-| `Tab` | Switch panel focus |
-| `Esc / Backspace` | Go back |
-| `q` | Quit |
-
-### Plan Summary View
-
-After running `terraform plan`, press `v` to switch from raw streaming output to a structured summary:
-
-```
-┌─ Plan Summary — 3 to add, 2 to change, 1 to destroy ─────┐
-│ ▶ module.metabase (2+, 0~, 1-)                            │
-│ ▼ module.rds (0+, 1~, 0-)                                 │
-│   ▶ ~ aws_db_instance.main                                │
-│ ▶ (root) (1+, 1~, 0-)                                     │
-└───────────────────────────────────────────────────────────┘
-```
-
-Navigate with `ctrl+j/k`, jump between modules with `alt+j/k`, expand resources with `Enter`.
+Upgrading from 0.1: the AWS SSO login used to be on by default; add `provider: aws-sso` to keep it.
 
 ---
 
-## Project Structure
+## How it keeps you safe
 
-```
-lazytf/
-├── cmd/lazytf/         # Entry point
-├── internal/
-│   ├── config/         # Config loading (YAML, XDG-compliant)
-│   ├── executor/       # Generic streaming command executor
-│   ├── auth/           # Login providers: aws-sso, gcloud, az, custom
-│   ├── aws/            # AWS SSO session discovery and login
-│   ├── terraform/      # Command builders: init, plan, apply, destroy
-│   └── ui/             # Bubble Tea components: model, sidebar, panels, modals
-```
+- **Nothing runs without a key press, and the risky ones ask first.** `init` and `destroy` open a confirmation. An apply without a saved plan shows Terraform's own plan and waits for `y`.
+- **Saved plans stay with their environment.** A plan is saved per project and environment, so `a` never offers another environment's plan. The apply menu shows the plan's age and warns when it is older than the last `init`, since it may then target another backend. Plans can hold sensitive values, so they live in your user cache directory (`~/.cache/lazytf/plans/` on Linux) with owner-only permissions, not in `/tmp`.
+- **No credential storage.** LazyTF asks for no secret and stores none. With a login provider it runs that provider's own CLI, and `auth.env` only sets the variables you wrote. With the `aws-sso` provider it reads `~/.aws/config` to list SSO session names.
+- **No hidden prompts.** Plan, apply and destroy run with `-input=false`, so a missing variable fails at once instead of waiting on a prompt you cannot see.
+- **No surprise scans.** LazyTF reads only the directory you start it in or name on the command line, or the ones listed in `search_paths`.
+
+---
+
+## Key bindings
+
+| Key | Action |
+|-----|--------|
+| `i` | Init the selected environment |
+| `p` | Plan |
+| `a` | Apply (offers the saved plan if there is one) |
+| `d` | Destroy (after a confirmation) |
+| `L` | Log in with the configured provider (hidden when none is set) |
+| `v` | Toggle plan summary / raw output |
+| `b` | Collapse / expand the sidebar |
+| `j/k` or `↑/↓` | Move in a list, scroll output |
+| `h/l` or `←/→` | Scroll output sideways |
+| `Tab` | Switch between sidebar and output |
+| `Enter` | Select |
+| `Esc` / `Backspace` | Back |
+| `?` | Help |
+| `q` | Quit |
+
+In the plan summary, `ctrl+j/k` moves between rows, `alt+j/k` jumps between modules and `Enter` expands a module or a resource.
+
+---
+
+## Compared with other Terraform UIs
+
+- **[terraform-tui](https://github.com/idoavrah/terraform-tui) (`tftui`)** is a terminal UI built around the state: browse and search the state tree, read resources, taint, untaint or remove them, and plan and apply in one working directory. Pick it to inspect and edit state.
+- **Web UIs such as [terraform-ui](https://github.com/mohnishbasha/terraform-ui)** run as a server and drive Terraform from a browser.
+- **LazyTF** is built around environments: it finds every project and var file in a repo, pairs each environment with its backend config, and remembers which one is initialised. It is a single binary that needs only Terraform, and it changes state only through `init`, `plan`, `apply` and `destroy`.
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome; the [issue templates](https://github.com/Nicolas-Rigaudy/lazytf/issues/new/choose) ask for what helps reproduce a problem.
 
 ### Running the tests
 
@@ -282,19 +330,36 @@ go test ./...                                                       # unit tests
 go test -tags integration -run Integration -v ./internal/terraform  # real init/plan/apply, needs terraform on PATH
 ```
 
-The integration test copies `internal/terraform/testdata/fixture` (local backend, `null` provider) to a temp dir, so it never touches your state.
+The integration test copies `internal/terraform/testdata/fixture` (local backend, `null` provider) to a temporary directory, so it never touches your state.
 
----
+### Recording the demo
 
-## Tech Stack
+```bash
+go build -o build/lazytf ./cmd/lazytf
+python3 docs/demo/record.py build/lazytf build/demo   # needs Python 3, pyte and terraform
+```
 
-- **[Go](https://go.dev/)** — fast, portable binary
-- **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** — Elm-inspired MVU TUI framework
-- **[Lipgloss](https://github.com/charmbracelet/lipgloss)** — declarative terminal styling
-- **[Bubbles](https://github.com/charmbracelet/bubbles)** — reusable TUI components (viewport, etc.)
+This writes one ANSI screen per step (`build/demo/*.ans`); turn them into images with any ANSI-to-PNG renderer (`--plain-symbols` helps one without a colour emoji font). The sample repo is copied first, so no state or `.terraform/` ends up in `docs/`.
+
+### Project structure
+
+```
+lazytf/
+├── cmd/lazytf/         # Entry point, flags and start-up checks
+├── docs/demo/          # Sample repo, recorder and README screenshots
+└── internal/
+    ├── config/         # Config loading (YAML, XDG-compliant)
+    ├── executor/       # Streaming command executor
+    ├── auth/           # Login providers: aws-sso, gcloud, az, custom
+    ├── aws/            # AWS SSO session discovery
+    ├── terraform/      # Discovery and command builders: init, plan, apply, destroy
+    └── ui/             # Bubble Tea components: model, sidebar, panels, modals
+```
+
+Built with [Go](https://go.dev/), [Bubble Tea](https://github.com/charmbracelet/bubbletea), [Lip Gloss](https://github.com/charmbracelet/lipgloss) and [Bubbles](https://github.com/charmbracelet/bubbles).
 
 ---
 
 ## License
 
-MIT
+[MIT](LICENSE)
