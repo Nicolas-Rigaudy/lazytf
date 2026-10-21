@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/Nicolas-Rigaudy/lazytf/internal/ui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -8,29 +10,26 @@ import (
 
 var (
 	sidebarTitleStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Mauve).
+				Foreground(theme.Active.Accent).
 				Bold(true).
 				Underline(true).
 				PaddingBottom(1)
 
 	sidebarFocusedStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Blue). // Blue when focused
+				BorderForeground(theme.Active.ActiveBorder). // Blue when focused
 				Padding(1)
 
 	sidebarUnfocusedStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Surface2). // Gray when unfocused
+				BorderForeground(theme.Active.InactiveBorder). // Gray when unfocused
 				Padding(1)
 
-	highlightedItemStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Crust).
-				Background(theme.Current.Blue).
-				Bold(true).
+	highlightedItemStyle = theme.Active.SelectedItem.
 				Padding(0, 1)
 
 	normalItemStyle = lipgloss.NewStyle().
-			Foreground(theme.Current.Text).
+			Foreground(theme.Active.Text).
 			Padding(0, 1)
 )
 
@@ -84,9 +83,9 @@ func (m SidebarModel) renderWithStyle(content string) string {
 // renderItem renders a single item with selection highlighting
 func (m SidebarModel) renderItem(index int, display string) string {
 	if index == m.SelectedIndex {
-		return highlightedItemStyle.Render(display)
+		return highlightedItemStyle.Render(theme.Active.SelectedMarker + display)
 	}
-	return normalItemStyle.Render(display)
+	return normalItemStyle.Render(strings.Repeat(" ", lipgloss.Width(theme.Active.SelectedMarker)) + display)
 }
 
 // isInitialized checks if the given item is the initialized environment

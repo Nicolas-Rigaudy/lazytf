@@ -10,21 +10,21 @@ import (
 var (
 	headerContainerStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Surface2).
+				BorderForeground(theme.Active.InactiveBorder).
 				Padding(1, 2)
 
 	headerLabelStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Mauve).
+				Foreground(theme.Active.Accent).
 				Bold(true)
 
 	headerValueStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Text)
+				Foreground(theme.Active.Text)
 
 	headerSuccessStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Green)
+				Foreground(theme.Active.Add)
 
 	headerErrorStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Red)
+				Foreground(theme.Active.Destroy)
 )
 
 type HeaderModel struct {
@@ -64,7 +64,7 @@ func (h HeaderModel) View(data InfoHeaderData) string {
 	)
 	line2 := ""
 	if data.LastCommand != "" {
-		line2 = lipgloss.NewStyle().Foreground(theme.Current.Subtext0).Render(
+		line2 = lipgloss.NewStyle().Foreground(theme.Active.Subtle).Render(
 			"Last: " + data.LastCommand + " (" + data.LastCommandTime.Format("15:04:05") + ")",
 		)
 	}

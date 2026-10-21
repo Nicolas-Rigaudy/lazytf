@@ -49,6 +49,9 @@ Not done, needs the owner:
 - Light-terminal and 80x24 checks, and AC4 (a tester plans a sample repo in under five minutes from the README): manual.
 - Empty states inside the TUI beyond the start-up messages, and the plan review from terraform show -json (road_001 0.4): UX design.
 
+Wave 2, branch night/ansi-theme, not merged (2026-10-21): LAZYTF_STYLE=ansi-a (lazygit-like) or ansi-b (blue accent) switches the colours to the terminal's 16 ANSI slots with no painted backgrounds; unset keeps Catppuccin. Colour roles live in internal/ui/theme/roles.go. Renders of both, dark and light, at 120x35 and 80x24 are waiting for the owner's pick; TestRenderScreens (LAZYTF_RENDER_DIR) regenerates them.
+- Plan rows in style B are bold blue without the extra marker, because the rows already start with a fold arrow.
+
 # Links
 - Request: `req_000_lazytf_1_0_public_release`
 - Product brief(s): (none yet)

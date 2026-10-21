@@ -2,13 +2,10 @@ package ui
 
 import (
 	"github.com/Nicolas-Rigaudy/lazytf/internal/ui/theme"
-	"github.com/charmbracelet/lipgloss"
 )
 
 var (
-	statusBarStyle = lipgloss.NewStyle().
-		Foreground(theme.Current.Text).
-		Background(theme.Current.Surface0).
+	statusBarStyle = theme.Active.StatusBar.
 		Padding(0, 2)
 )
 

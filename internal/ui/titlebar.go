@@ -6,10 +6,7 @@ import (
 )
 
 var (
-	titleBarStyle = lipgloss.NewStyle().
-		Background(theme.Current.Mauve).
-		Foreground(theme.Current.Crust).
-		Bold(true).
+	titleBarStyle = theme.Active.TitleBar.
 		Padding(0, 2).
 		Align(lipgloss.Center)
 )

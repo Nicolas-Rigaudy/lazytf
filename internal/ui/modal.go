@@ -180,7 +180,7 @@ type ModalBuilder struct {
 	BorderColor lipgloss.Color // Border color from theme
 }
 
-var modalTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(theme.Current.Mauve)
+var modalTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(theme.Active.Accent)
 var modalButtonStyle = lipgloss.NewStyle().Padding(0, 1).Bold(true)
 
 // Render builds and returns the final modal string

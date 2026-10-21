@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	addStyle      = lipgloss.NewStyle().Foreground(theme.Current.Green).Bold(true)
-	deleteStyle   = lipgloss.NewStyle().Foreground(theme.Current.Red).Bold(true)
-	changeStyle   = lipgloss.NewStyle().Foreground(theme.Current.Yellow).Bold(true)
-	selectedStyle = lipgloss.NewStyle().Background(theme.Current.Surface1)
+	addStyle      = lipgloss.NewStyle().Foreground(theme.Active.Add).Bold(true)
+	deleteStyle   = lipgloss.NewStyle().Foreground(theme.Active.Destroy).Bold(true)
+	changeStyle   = lipgloss.NewStyle().Foreground(theme.Active.Change).Bold(true)
+	selectedStyle = theme.Active.Selected
 )
 
 type ModuleGroup struct {
@@ -88,6 +88,10 @@ func (vm *PlanSummaryViewModel) updateContent() {
 
 		// Highlight if module header is selected
 		if moduleIdx == vm.SelectedModuleIndex && vm.SelectedResourceIndex == -1 {
+			if theme.Active.Name != "catppuccin" {
+				// reverse video would end at the first nested colour reset
+				moduleLine = fmt.Sprintf("%s %s (%d+, %d~, %d-)", arrow, group.Name, group.AddCount, group.ChangeCount, group.DeleteCount)
+			}
 			moduleLine = selectedStyle.Render(moduleLine)
 		}
 
@@ -114,6 +118,9 @@ func (vm *PlanSummaryViewModel) updateContent() {
 
 				// Highlight if this resource is selected
 				if moduleIdx == vm.SelectedModuleIndex && resourceIdx == vm.SelectedResourceIndex {
+					if theme.Active.Name != "catppuccin" {
+						resourceLine = resArrow + " " + prefix + " " + shortName
+					}
 					resourceLine = selectedStyle.Render(resourceLine)
 				}
 
