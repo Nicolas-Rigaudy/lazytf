@@ -25,3 +25,4 @@ All notable changes to LazyTF are listed here. Release notes on GitHub are gener
 ### Fixed
 - Ignore patterns such as `*/.git` never matched; they now match trailing path segments.
 - Failed commands name the command and the reason in the status bar; start failures are no longer reported as "exit code 0".
+- The header box was two columns wider than the terminal, so its right border was cut off.
