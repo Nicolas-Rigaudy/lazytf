@@ -120,9 +120,14 @@ func resolveStart(opts options, cwd string) (start, error) {
 	if explicit {
 		cfg.SearchPaths = []string{dir} // scan the directory that was asked for
 	}
+	home, _ := os.UserHomeDir()
 	for i, p := range cfg.SearchPaths {
 		if p, err = expandArgPath(p, cwd); err != nil {
 			return start{}, err
+		}
+		if !explicit && cfg.SearchPaths[i] == "." && home != "" && p == filepath.Clean(home) {
+			return start{}, errors.New("this is your home directory and it holds no Terraform files; LazyTF will not scan all of it\n" +
+				"cd into a project, pass its path, or list directories to scan as search_paths in the config file")
 		}
 		cfg.SearchPaths[i] = p // relative search paths are relative to the working directory
 	}

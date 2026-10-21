@@ -185,3 +185,17 @@ func TestVersionString(t *testing.T) {
 		t.Errorf("versionString() = %q, want the ldflags version", got)
 	}
 }
+
+func TestResolveStartRefusesToScanHome(t *testing.T) {
+	isolate(t)
+	home, _ := os.UserHomeDir()
+	writeTree(t, home, "Projects/elsewhere/main.tf")
+	_, err := resolveStart(options{}, home)
+	if err == nil || !strings.Contains(err.Error(), "home directory") {
+		t.Fatalf("err = %v, want a home directory refusal", err)
+	}
+	// an explicit path is the user's choice
+	if _, err := resolveStart(options{path: home}, home); err != nil {
+		t.Errorf("explicit home path: %v", err)
+	}
+}
