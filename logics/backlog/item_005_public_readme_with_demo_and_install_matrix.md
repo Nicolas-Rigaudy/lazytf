@@ -1,13 +1,14 @@
 ## item_005_public_readme_with_demo_and_install_matrix - Public README with demo and install matrix
 > From version: 0.1.0
 > Schema version: 1.0
-> Status: Ready
+> Status: In progress
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 0%
+> Progress: 10%
 > Complexity: Medium
 > Theme: General
 > Reminder: Update status/understanding/confidence/progress and linked request/task references when you edit this doc.
+> Indicators reviewed: 2026-10-21 21:04:55
 
 # AI Context
 - Summary: Rewrite the README for strangers: what it is, a demo GIF or asciinema cast, an install matrix, configuration for common layouts, safety notes and a comparison with other Terraform TUIs.
@@ -54,3 +55,6 @@
 
 # Notes
 - Roadmap milestone: 1.0 - Public release (`road_001_lazytf_to_1_0`).
+
+# Tasks
+- `task_006_public_readme_with_demo_and_install_matrix`
