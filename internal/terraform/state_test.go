@@ -1,6 +1,8 @@
 package terraform
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -46,7 +48,7 @@ func TestDetectCurrentBackend(t *testing.T) {
 		wantEnv     string
 		wantMatched []string
 	}{
-		{name: "not initialised", files: map[string]string{"main.tf": ""}},
+		{name: "not initialised", files: map[string]string{"main.tf": "provider \"aws\" {}\n"}},
 		{name: "initialised, no backend state", files: map[string]string{".terraform/providers/x": ""}, wantInit: true},
 		{name: "initialised, invalid state json", files: map[string]string{".terraform/terraform.tfstate": "{"}, wantInit: true},
 		{
@@ -76,6 +78,38 @@ func TestDetectCurrentBackend(t *testing.T) {
 			}
 			if !slices.Equal(matched, tt.wantMatched) {
 				t.Errorf("MatchedBackends = %v, want %v", matched, tt.wantMatched)
+			}
+		})
+	}
+}
+
+func TestNeedsInit(t *testing.T) {
+	tests := map[string]struct {
+		files map[string]string
+		want  bool
+	}{
+		"locals only":    {map[string]string{"main.tf": "locals {\n  a = 1\n}\noutput \"a\" {\n  value = local.a\n}\n"}, false},
+		"terraform_data": {map[string]string{"main.tf": "resource \"terraform_data\" \"x\" {\n}\n"}, false},
+		"resource":       {map[string]string{"main.tf": "resource \"aws_s3_bucket\" \"b\" {\n}\n"}, true},
+		"module":         {map[string]string{"main.tf": "module \"m\" {\n  source = \"./m\"\n}\n"}, true},
+		"provider":       {map[string]string{"main.tf": "provider \"aws\" {}\n"}, true},
+		"backend":        {map[string]string{"main.tf": "terraform {\n  backend \"s3\" {}\n}\n"}, true},
+		"json syntax":    {map[string]string{"main.tf.json": "{}"}, true},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			for f, c := range tt.files {
+				if err := os.WriteFile(filepath.Join(dir, f), []byte(c), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := needsInit(dir); got != tt.want {
+				t.Errorf("needsInit = %v, want %v", got, tt.want)
+			}
+			st := detectCurrentBackend(t.TempDir(), dir, nil)
+			if st.IsInitialized == tt.want {
+				t.Errorf("IsInitialized = %v for needsInit %v", st.IsInitialized, tt.want)
 			}
 		})
 	}

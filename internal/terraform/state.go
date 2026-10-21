@@ -11,8 +11,39 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+// initBlock matches the top-level blocks that make terraform init download or
+// configure something. terraform_data is built in and needs no provider.
+var initBlock = regexp.MustCompile(`(?m)^\s*(provider|module|backend|cloud|required_providers|resource|data)\b(?:\s+"([^"]*)")?`)
+
+// needsInit reports whether the configuration in dir needs terraform init:
+// it uses a provider, a module or a backend. Unreadable or JSON-syntax
+// configuration is assumed to need it.
+func needsInit(dir string) bool {
+	files, err := filepath.Glob(filepath.Join(dir, "*.tf"))
+	if err != nil || len(files) == 0 {
+		return true
+	}
+	if json, _ := filepath.Glob(filepath.Join(dir, "*.tf.json")); len(json) > 0 {
+		return true
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return true
+		}
+		for _, m := range initBlock.FindAllStringSubmatch(string(data), -1) {
+			if (m[1] == "resource" || m[1] == "data") && m[2] == "terraform_data" {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
 
 // DetectCurrentBackend checks if Terraform is initialized and detects the current backend configuration.
 // It reads .terraform/terraform.tfstate to determine which backend is currently active.
@@ -29,7 +60,12 @@ func detectCurrentBackend(cacheDir, projectPath string, backendVarFiles []Backen
 	// Check if .terraform directory exists
 	terraformDir := filepath.Join(projectPath, ".terraform")
 	if _, err := os.Stat(terraformDir); os.IsNotExist(err) {
-		// Not initialized
+		// terraform init creates no .terraform/ for a configuration that
+		// needs no provider, module or backend; it is ready as it is.
+		if !needsInit(projectPath) {
+			state.IsInitialized = true
+			state.AnyEnv = len(backendVarFiles) == 0
+		}
 		return state
 	}
 

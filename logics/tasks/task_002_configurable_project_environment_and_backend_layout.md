@@ -56,7 +56,7 @@
 - Layout lives in `config.Layout` (global `config.yml` keys plus `.lazytf.yml`); discovery uses a small glob matcher with `**`.
 - The init record is keyed to a fingerprint of `.terraform/terraform.tfstate`, so a manual re-init invalidates it and inference is the fallback.
 - A project with no backend config files treats one init as valid for every env (`BackendState.AnyEnv`).
-- Known limit: a project that declares no provider and no backend block gets no `.terraform/` from init, so LazyTF reports it as not initialised.
+- A project that declares no provider, module or backend gets no `.terraform/` from init; LazyTF treats such a configuration as ready (`needsInit`).
 - Finished on 2026-10-20.
 - Linked backlog item(s): `item_001_configurable_project_env_and_backend_layout`
 - Related request(s): `req_000_lazytf_1_0_public_release`
