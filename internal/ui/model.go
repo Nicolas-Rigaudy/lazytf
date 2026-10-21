@@ -1079,7 +1079,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.titleBar.Width = m.width
 		m.statusBar.Width = m.width
-		m.header.Width = m.width
+		m.header.Width = m.width - 2 // lipgloss Width excludes the border
 		m.sidebar.Width = sidebarWidth
 		m.sidebar.Height = panelHeight
 		m.mainPanel.SetSize(mainPanelWidth, panelHeight)
