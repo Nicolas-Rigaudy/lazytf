@@ -4,13 +4,13 @@
 > Status: Ready
 > Understanding: 90%
 > Confidence: 85%
-> Progress: 50%
+> Progress: 70%
 > Complexity: Medium
 > Theme: Implementation delivery
 > Reminder: Update status/understanding/confidence/progress and linked request/backlog references when you edit this doc.
 
 # AI Context
-- Summary: Deliver item_003 in waves. Wave 1 (non-visual): CLI flags and path argument, project detection, start-up errors, one keybind list, scan speed. Waves left need owner choices: ANSI colour mapping, light/small terminal checks, README timing test.
+- Summary: Deliver item_003 in waves. Wave 1 (non-visual): CLI flags and path argument, project detection, start-up errors, one keybind list, scan speed. Wave 2: ANSI colours (owner pick: style A). Left for the owner: light/small terminal checks on a real terminal, README timing test, in-TUI empty states.
 - Keywords: first, run, error, messages, polish
 - Use when: Changing startup, CLI flags, empty states or help text.
 - Skip when: The work is about the env model or packaging.
@@ -45,7 +45,6 @@ Wave 1 done (2026-10-20):
 - 2e610d1: one ReadDir per directory when scanning; 40k-directory synthetic tree 1.05s -> 0.27s.
 
 Not done, needs the owner:
-- AC5 colours: mapping the 16 ANSI slots to UI roles and dropping the backgrounds is a visual choice.
 - Light-terminal and 80x24 checks, and AC4 (a tester plans a sample repo in under five minutes from the README): manual.
 - Empty states inside the TUI beyond the start-up messages, and the plan review from terraform show -json (road_001 0.4): UX design.
 
