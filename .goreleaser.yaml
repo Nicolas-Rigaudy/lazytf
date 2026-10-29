@@ -45,6 +45,52 @@ changelog:
       - '^new\[(DOCS|CI)\]'
       - '^fix\[CI\]'
 
+# AUR and Homebrew publishing stay off until their secrets exist (see docs/releasing.md).
+aurs:
+  - name: lazytf-bin
+    disable: '{{ if not (isEnvSet "AUR_KEY") }}true{{ end }}'
+    homepage: https://github.com/Nicolas-Rigaudy/lazytf
+    description: Keyboard-driven terminal UI for Terraform
+    maintainers:
+      - "Nicolas Rigaudy <nicolas dot rigaudy at gmail dot com>"
+    license: MIT
+    private_key: '{{ envOrDefault "AUR_KEY" "" }}'
+    git_url: "ssh://aur@aur.archlinux.org/lazytf-bin.git"
+    provides:
+      - lazytf
+    conflicts:
+      - lazytf
+    package: |-
+      install -Dm755 "./lazytf" "${pkgdir}/usr/bin/lazytf"
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/lazytf/LICENSE"
+    commit_author:
+      name: Nicolas Rigaudy
+      email: nicolas.rigaudy@gmail.com
+
+homebrew_casks:
+  - name: lazytf
+    skip_upload: '{{ if not (isEnvSet "HOMEBREW_TAP_GITHUB_TOKEN") }}true{{ end }}'
+    repository:
+      owner: Nicolas-Rigaudy
+      name: homebrew-tap
+      token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
+    directory: Casks
+    homepage: https://github.com/Nicolas-Rigaudy/lazytf
+    description: Keyboard-driven terminal UI for Terraform
+    license: MIT
+    binaries:
+      - lazytf
+    commit_author:
+      name: Nicolas Rigaudy
+      email: nicolas.rigaudy@gmail.com
+    # The binaries are not notarised; clear the quarantine flag on install.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/lazytf"]
+          end
+
 release:
   github:
     owner: Nicolas-Rigaudy
