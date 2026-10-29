@@ -49,6 +49,10 @@ Not done, needs the owner:
 - Light-terminal and 80x24 checks, and AC4 (a tester plans a sample repo in under five minutes from the README): manual.
 - Empty states inside the TUI beyond the start-up messages, and the plan review from terraform show -json (road_001 0.4): UX design.
 
+Wave 2 (2026-10-29, owner pick of 2026-10-22: style A):
+- The UI uses only the terminal's 16 ANSI slots and paints no backgrounds: green active border, reverse-video selection, cyan accents, bright black for muted text, plan +/~/- in green/yellow/red. The Catppuccin hex palette and the LAZYTF_STYLE switch are gone. Colour roles live in internal/ui/theme/roles.go; a test fails on any hex, 256-colour slot or background. (AC5)
+- TestRenderScreens (LAZYTF_RENDER_DIR) writes the main screen at 120x35 and 80x24 as ANSI text for renders.
+
 # Links
 - Request: `req_000_lazytf_1_0_public_release`
 - Product brief(s): (none yet)

@@ -55,7 +55,7 @@ a     → apply the saved plan
 - **Any layout.** Var files and backend configs are found by globs you can change per repo.
 - **Terraform or OpenTofu**, or any other compatible binary.
 - **Optional login** for AWS SSO, `gcloud`, `az` or your own command, with a retry of the failed command afterwards.
-- **One static binary** for Linux and macOS. Catppuccin colours.
+- **One static binary** for Linux and macOS. Colours follow your terminal theme.
 
 ---
 

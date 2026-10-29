@@ -8,29 +8,26 @@ import (
 
 var (
 	sidebarTitleStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Mauve).
+				Foreground(theme.Active.Accent).
 				Bold(true).
 				Underline(true).
 				PaddingBottom(1)
 
 	sidebarFocusedStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Blue). // Blue when focused
+				BorderForeground(theme.Active.ActiveBorder).
 				Padding(1)
 
 	sidebarUnfocusedStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Surface2). // Gray when unfocused
+				BorderForeground(theme.Active.InactiveBorder).
 				Padding(1)
 
-	highlightedItemStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Crust).
-				Background(theme.Current.Blue).
-				Bold(true).
+	highlightedItemStyle = theme.Active.SelectedItem.
 				Padding(0, 1)
 
 	normalItemStyle = lipgloss.NewStyle().
-			Foreground(theme.Current.Text).
+			Foreground(theme.Active.Text).
 			Padding(0, 1)
 )
 

@@ -12,28 +12,25 @@ import (
 var (
 	mainPanelFocusedStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Blue). // Blue when focused
+				BorderForeground(theme.Active.ActiveBorder).
 				Padding(1)
 
 	mainPanelUnfocusedStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Surface2). // Gray when unfocused
+				BorderForeground(theme.Active.InactiveBorder).
 				Padding(1)
 
 	mainPanelErrorStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(theme.Current.Red). // Red when error
+				BorderForeground(theme.Active.Destroy). // Red when error
 				Padding(1)
 
 	mainPanelTitleStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Mauve).
+				Foreground(theme.Active.Accent).
 				Bold(true).
 				PaddingBottom(1)
 
-	confirmPromptStyle = lipgloss.NewStyle().
-				Foreground(theme.Current.Base).
-				Background(theme.Current.Mauve).
-				Bold(true).
+	confirmPromptStyle = theme.Active.ConfirmPrompt.
 				Padding(0, 1)
 )
 

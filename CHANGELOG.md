@@ -5,6 +5,7 @@ All notable changes to LazyTF are listed here. Release notes on GitHub are gener
 ## Unreleased
 
 ### Changed
+- Colours come from the terminal's 16 ANSI colours and no background is painted, so LazyTF follows the terminal theme, light or dark. The built-in Catppuccin palette is gone.
 - The saved plan is keyed by project path and environment, so two environments or two projects with the same directory name never share a plan. Plans live in the user cache directory (0700), not in `/tmp`.
 - `config.yml` is merged over the defaults key by key: a file that only sets `search_paths` keeps the default ignore patterns.
 - Plan, apply and destroy run with `-input=false`; the approval prompt still reads the confirmation sent by LazyTF.

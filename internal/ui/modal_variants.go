@@ -28,12 +28,12 @@ func RenderConfirmModal(state ModalState, termWidth, termHeight int) string {
 		Title:   state.Title,
 		Content: state.Message,
 		Buttons: []ModalButton{
-			{Label: "[Enter/y] " + confirmLabel, Color: theme.Current.Green, Key: "y"},
-			{Label: "[ESC/n] " + cancelLabel, Color: theme.Current.Red, Key: "n"},
+			{Label: "[Enter/y] " + confirmLabel, Color: theme.Active.Add, Key: "y"},
+			{Label: "[ESC/n] " + cancelLabel, Color: theme.Active.Destroy, Key: "n"},
 		},
 		Width:       60,
 		Height:      14,
-		BorderColor: theme.Current.Blue,
+		BorderColor: theme.Active.ActiveBorder,
 	}
 
 	return builder.Render(termWidth, termHeight)
@@ -54,12 +54,12 @@ func RenderSelectModal(state ModalState, termWidth, termHeight int) string {
 		Title:   state.Title,
 		Content: content,
 		Buttons: []ModalButton{
-			{Label: "[Enter] Select", Color: theme.Current.Green, Key: "enter"},
-			{Label: "[ESC] Cancel", Color: theme.Current.Red, Key: "esc"},
+			{Label: "[Enter] Select", Color: theme.Active.Add, Key: "enter"},
+			{Label: "[ESC] Cancel", Color: theme.Active.Destroy, Key: "esc"},
 		},
 		Width:       50,
 		Height:      len(state.Items) + 8, // Dynamic height based on items
-		BorderColor: theme.Current.Blue,
+		BorderColor: theme.Active.ActiveBorder,
 	}
 
 	return builder.Render(termWidth, termHeight)
@@ -76,11 +76,11 @@ func RenderErrorModal(state ModalState, termWidth, termHeight int) string {
 		Title:   title,
 		Content: state.ErrorText,
 		Buttons: []ModalButton{
-			{Label: "[Enter] OK", Color: theme.Current.Red, Key: "enter"},
+			{Label: "[Enter] OK", Color: theme.Active.Destroy, Key: "enter"},
 		},
 		Width:       70,
 		Height:      12,
-		BorderColor: theme.Current.Red, // Red border for errors
+		BorderColor: theme.Active.Destroy, // Red border for errors
 	}
 
 	return builder.Render(termWidth, termHeight)
@@ -94,17 +94,17 @@ func RenderHelpModal(state ModalState, termWidth, termHeight int) string {
 			rows = append(rows, []string{"", ""}) // spacer between groups
 		}
 		rows = append(rows, []string{
-			lipgloss.NewStyle().Bold(true).Foreground(theme.Current.Mauve).Render(group.Title),
+			lipgloss.NewStyle().Bold(true).Foreground(theme.Active.Accent).Render(group.Title),
 			"",
 		})
 		for _, kb := range group.KeyBindings {
 			var keyStr, descStr string
 			if kb.Enabled {
-				keyStr = lipgloss.NewStyle().Foreground(theme.Current.Green).Render(kb.Key)
+				keyStr = lipgloss.NewStyle().Foreground(theme.Active.Hint).Render(kb.Key)
 				descStr = kb.Description
 			} else {
-				keyStr = lipgloss.NewStyle().Foreground(theme.Current.Overlay0).Render(kb.Key)
-				descStr = lipgloss.NewStyle().Foreground(theme.Current.Overlay0).Render(kb.Description)
+				keyStr = lipgloss.NewStyle().Foreground(theme.Active.Muted).Render(kb.Key)
+				descStr = lipgloss.NewStyle().Foreground(theme.Active.Muted).Render(kb.Description)
 			}
 			rows = append(rows, []string{keyStr, descStr})
 		}
@@ -115,11 +115,11 @@ func RenderHelpModal(state ModalState, termWidth, termHeight int) string {
 		Title: "📖 Help - Key Bindings",
 		Rows:  rows,
 		Buttons: []ModalButton{
-			{Label: "[ESC] Close", Color: theme.Current.Blue, Key: "esc"},
+			{Label: "[ESC] Close", Color: theme.Active.ActiveBorder, Key: "esc"},
 		},
 		Width:       60,
 		Height:      totalRows + 10,
-		BorderColor: theme.Current.Blue,
+		BorderColor: theme.Active.ActiveBorder,
 	}
 
 	return builder.Render(termWidth, termHeight)
